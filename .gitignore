@@ -1,0 +1,4 @@
+node_modules/
+dist/
+e2e/.saida/
+*.y4m
