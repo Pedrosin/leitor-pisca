@@ -10,6 +10,8 @@ const CONDICOES: Record<string, Partial<Cena>> = {
   limpo: {},
   ruido: { ruido: 10 },
   tremida: { tremorPx: 4 },
+  tremidaForte: { tremorPx: 6 },
+  derivaDoBraco: { derivaPxPorS: 0.5, tremorPx: 2 },
   reflexo: { reflexo: true },
   reflexoPeriodico: { reflexo: 'periodico' },
   autoExposicao: { autoExposicao: true },

@@ -95,8 +95,20 @@ export function fronteiraAprendida(
   return melhorRazao >= razaoMinima ? melhor : fixa;
 }
 
-/** Longos vêm antes dos curtos. Qualquer outra ordem é leitura inválida. */
-export function classificarGrupo(duracoes: readonly number[], fronteira: number): Digitos | null {
+/** Apagados entre piscas do mesmo tipo variam no máximo isso (o maior sobre o menor). */
+const RAZAO_INTERVALOS = 1.8;
+
+/**
+ * Longos vêm antes dos curtos. Qualquer outra ordem é leitura inválida.
+ * `intervalos[i]` = apagado entre o pisca i e o i+1. Entre dois longos e entre dois curtos o apagado é
+ * sempre o mesmo; um apagado ~3× maior que os outros do mesmo tipo é pisca perdido no meio, e o código
+ * sai descartado em vez de errado. (Pisca perdido no fim do código não deixa rastro aqui.)
+ */
+export function classificarGrupo(
+  duracoes: readonly number[],
+  fronteira: number,
+  intervalos: readonly number[] = [],
+): Digitos | null {
   let dezenas = 0;
   let unidades = 0;
   for (const d of duracoes) {
@@ -108,5 +120,10 @@ export function classificarGrupo(duracoes: readonly number[], fronteira: number)
     }
   }
   if (dezenas > 9 || unidades > 9 || dezenas + unidades === 0) return null;
+  const entreLongos = intervalos.slice(0, Math.max(0, dezenas - 1));
+  const entreCurtos = intervalos.slice(dezenas, dezenas + Math.max(0, unidades - 1));
+  for (const lista of [entreLongos, entreCurtos]) {
+    if (lista.length >= 2 && Math.max(...lista) > Math.min(...lista) * RAZAO_INTERVALOS) return null;
+  }
   return { dezenas, unidades };
 }

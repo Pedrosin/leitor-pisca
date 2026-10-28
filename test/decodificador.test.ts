@@ -90,6 +90,14 @@ describe('classificar grupo', () => {
     expect(classificarGrupo([1300], 800)).toEqual({ dezenas: 1, unidades: 0 });
     expect(classificarGrupo(Array(9).fill(400), 800)).toEqual({ dezenas: 0, unidades: 9 });
   });
+  test('pisca perdido no meio (apagado 3× maior que os outros do mesmo tipo) descarta o código', () => {
+    // 4 curtos com o 3º perdido: sobram 3 curtos e os apagados ficam 400, 1200.
+    expect(classificarGrupo([400, 400, 400], 800, [400, 1200])).toBeNull();
+    expect(classificarGrupo([400, 400, 400], 800, [400, 420])).toEqual({ dezenas: 0, unidades: 3 });
+    // O apagado entre o último longo e o primeiro curto pode ser diferente: não conta.
+    expect(classificarGrupo([1300, 1300, 400, 400], 800, [400, 900, 400])).toEqual({ dezenas: 2, unidades: 2 });
+  });
+
   test('curto antes de longo é leitura inválida', () => {
     expect(classificarGrupo([400, 1300], 800)).toBeNull();
     expect(classificarGrupo(Array(10).fill(400), 800)).toBeNull();

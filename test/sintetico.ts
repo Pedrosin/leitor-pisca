@@ -79,6 +79,8 @@ export interface Cena {
   lampada: { cx: number; cy: number; raioPx: number };
   ruido: number;
   tremorPx: number;
+  /** Deriva lenta do celular (braço cansando), em px por segundo, na diagonal. */
+  derivaPxPorS: number;
   /**
    * Mancha de reflexo perto da luz. true = passeia ao acaso (mão que mexe);
    * 'periodico' = vai e volta em ciclo fixo (caso adversário: imita repetição).
@@ -103,6 +105,7 @@ export const CENA_PADRAO: Cena = {
   lampada: { cx: 0.5, cy: 0.5, raioPx: 5 },
   ruido: 0,
   tremorPx: 0,
+  derivaPxPorS: 0,
   reflexo: false,
   autoExposicao: false,
   luzesConstantes: false,
@@ -209,6 +212,14 @@ export function* gerarQuadros(parcial: Partial<Cena>): Generator<Quadro> {
       if (t <= brilhoAte) brilhoGlobal = 90;
     }
 
+    if (cena.derivaPxPorS > 0) {
+      // Vai e volta devagar (±12 px), como braço que cede e corrige.
+      const d = (cena.derivaPxPorS * t) / 1000;
+      const ida = d % 48;
+      const pos = ida < 24 ? ida - 12 : 36 - ida;
+      ox += pos;
+      oy += pos * 0.6;
+    }
     const lum = new Uint8Array(w * h);
     const lxt = lx + ox;
     const lyt = ly + oy;

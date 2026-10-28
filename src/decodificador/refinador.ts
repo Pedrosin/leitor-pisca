@@ -12,13 +12,17 @@ export interface ConfigRefinador {
   alcance: number;
   /** Tempo de observação antes de sugerir. */
   observarMs: number;
-  /** Fração da maior amplitude que conta como pixel da lâmpada. */
+  /**
+   * Fração do maior contraste que conta como pixel da lâmpada. Baixo de propósito: com a mão tremendo,
+   * a lâmpada se espalha e os pixels da borda do movimento têm contraste menor; o disco precisa cobri-los
+   * (0,5 perdia a leitura com tremida de 6 px; 0,2 aguenta 8 px — DECISOES.md D11).
+   */
   corte: number;
   /** Folga somada ao raio estimado, em px, para a tremida não tirar a lâmpada do disco. */
   folgaPx: number;
 }
 
-const PADRAO: ConfigRefinador = { alcance: 2.5, observarMs: 6000, corte: 0.5, folgaPx: 1.5 };
+const PADRAO: ConfigRefinador = { alcance: 2.5, observarMs: 6000, corte: 0.2, folgaPx: 1.5 };
 
 export class RefinadorRegiao {
   private readonly cfg: ConfigRefinador;

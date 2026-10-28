@@ -31,6 +31,8 @@ export class Decodificador {
   private duracoes: number[] = [];
   private intervalos: number[] = [];
   private grupo: number[] = [];
+  /** Apagados entre os piscas do código em andamento. */
+  private grupoIntervalos: number[] = [];
   /** O primeiro pisca do grupo veio depois de uma pausa vista inteira? Se não, o código pode estar cortado. */
   private grupoLimpo = false;
   private ultimaSubida = Number.NaN;
@@ -56,6 +58,7 @@ export class Decodificador {
     this.duracoes = [];
     this.intervalos = [];
     this.grupo = [];
+    this.grupoIntervalos = [];
     this.grupoLimpo = false;
     this.ultimaSubida = Number.NaN;
     this.acesoDesde = Number.NaN;
@@ -94,6 +97,7 @@ export class Decodificador {
 
   private aoSubir(t: number): void {
     const pausa = t - this.ultimaDescida;
+    if (this.grupo.length > 0 && !Number.isNaN(pausa)) this.grupoIntervalos.push(pausa);
     if (this.grupo.length === 0) {
       this.inicioGrupo = t;
       this.grupoLimpo = !Number.isNaN(pausa) && pausa >= this.pausaCodigo() && !this.luzConstante;
@@ -129,13 +133,15 @@ export class Decodificador {
     if (estado === 'aceso' && !this.luzConstante && t - this.acesoDesde >= this.cfg.luzConstanteMs) {
       this.luzConstante = true;
       this.grupo = [];
+      this.grupoIntervalos = [];
       this.registrar(null, t);
     }
   }
 
   private fecharGrupo(): void {
-    const digitos = this.grupoLimpo ? classificarGrupo(this.grupo, this.fronteira()) : null;
+    const digitos = this.grupoLimpo ? classificarGrupo(this.grupo, this.fronteira(), this.grupoIntervalos) : null;
     this.grupo = [];
+    this.grupoIntervalos = [];
     this.registrar(digitos ? digitos.dezenas * 10 + digitos.unidades : null, this.inicioGrupo);
   }
 
