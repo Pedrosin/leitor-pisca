@@ -24,7 +24,8 @@ npm run celular
 ```
 Abra no celular o endereço `https://<ip-do-pc>:4173/` que aparece em "Network". O certificado é autoassinado, então o navegador avisa: aceite e continue. Sem HTTPS, o celular não libera a câmera. Para instalar: Android → menu → "Instalar app"; iPhone (Safari) → Compartilhar → "Adicionar à Tela de Início".
 
-Publicar (GitHub Pages ou outro lugar) depende do ok do Victor. O build já sai com caminhos relativos e funciona em subpasta.
+### Publicado
+https://pedrosin.github.io/leitor-pisca/ (HTTPS, então a câmera funciona direto no celular, sem o aviso de certificado). Cada push na `master` roda os testes e publica pelo workflow `.github/workflows/pages.yml`. O build sai com caminhos relativos e funciona em subpasta.
 
 ## Estrutura
 - `src/decodificador/`: TS puro, sem DOM (vai virar Kotlin). Peças: `amostragem` (quadro → número), `limiar`, `piscas` (bordas, curto/longo), `ciclos` (confirmação), `refinador` (ajuste do toque), `detector` + `buscador` (achar sem toque), `leitor` (orquestra). O `tsconfig.decodificador.json` impede o uso de DOM aqui.
