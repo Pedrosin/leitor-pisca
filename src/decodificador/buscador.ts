@@ -20,10 +20,16 @@ export class BuscadorLuz {
   private decodificador: Decodificador | null = null;
   private ultimaConsulta = Number.NaN;
   private achada: Sugestao | null = null;
+  private lidosNaBusca: number[] | null = null;
 
   /** Ponto onde uma leitura foi confirmada, ou null. */
   get sugestao(): Sugestao | null {
     return this.achada;
+  }
+
+  /** Códigos que a busca confirmou no ponto achado (o Leitor que assume depois recomeça do zero). */
+  get confirmados(): number[] | null {
+    return this.lidosNaBusca ? [...this.lidosNaBusca] : null;
   }
 
   /** Candidato do detector ainda não confirmado (para mostrar "procurando aqui"). */
@@ -32,7 +38,7 @@ export class BuscadorLuz {
   }
 
   processarQuadro(t: number, lum: Uint8Array, largura: number, altura: number): void {
-    if (this.achada) return;
+    if (this.achada || !Number.isFinite(t)) return;
     this.detector.adicionar(t, lum, largura, altura);
     if (Number.isNaN(this.ultimaConsulta) || t - this.ultimaConsulta >= CONSULTA_MS) {
       this.ultimaConsulta = t;
@@ -46,6 +52,7 @@ export class BuscadorLuz {
     const e = this.decodificador.processarQuadro(t, lum, largura, altura, this.candidato);
     if (e.confirmados) {
       this.achada = { ...this.candidato, confianca: 1 };
+      this.lidosNaBusca = e.confirmados;
     }
   }
 }

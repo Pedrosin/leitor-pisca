@@ -28,7 +28,8 @@ export class RefinadorRegiao {
   private readonly cfg: ConfigRefinador;
   private readonly x0: number;
   private readonly y0: number;
-  private readonly lado: number;
+  private readonly ladoX: number;
+  private readonly ladoY: number;
   private readonly somaAceso: Float64Array;
   private readonly somaApagado: Float64Array;
   private quadrosAceso = 0;
@@ -48,9 +49,11 @@ export class RefinadorRegiao {
     this.y0 = Math.max(0, Math.round(tocada.cy * altura - alcancePx));
     const x1 = Math.min(largura, Math.round(tocada.cx * largura + alcancePx));
     const y1 = Math.min(altura, Math.round(tocada.cy * altura + alcancePx));
-    this.lado = Math.max(1, Math.min(x1 - this.x0, y1 - this.y0));
-    this.somaAceso = new Float64Array(this.lado * this.lado);
-    this.somaApagado = new Float64Array(this.lado * this.lado);
+    // Largura e altura independentes: perto da borda a janela fica retangular, mas centrada no toque.
+    this.ladoX = Math.max(1, x1 - this.x0);
+    this.ladoY = Math.max(1, y1 - this.y0);
+    this.somaAceso = new Float64Array(this.ladoX * this.ladoY);
+    this.somaApagado = new Float64Array(this.ladoX * this.ladoY);
   }
 
   get observadoMs(): number {
@@ -60,14 +63,15 @@ export class RefinadorRegiao {
   /** `aceso` é o estado que o decodificador viu neste quadro; null = ainda não sabe. */
   adicionar(t: number, lum: Uint8Array, largura: number, altura: number, aceso: boolean | null): void {
     if (largura !== this.largura || altura !== this.altura) return;
+    if (!Number.isFinite(t) || t <= this.ultimoT) return;
     if (Number.isNaN(this.tInicio)) this.tInicio = t;
     this.ultimoT = t;
     if (aceso === null) return;
-    const n = this.lado * this.lado;
+    const n = this.ladoX * this.ladoY;
     const valores = new Uint8Array(n);
-    for (let y = 0; y < this.lado; y++) {
+    for (let y = 0; y < this.ladoY; y++) {
       const base = (this.y0 + y) * largura + this.x0;
-      for (let x = 0; x < this.lado; x++) valores[y * this.lado + x] = lum[base + x] as number;
+      for (let x = 0; x < this.ladoX; x++) valores[y * this.ladoX + x] = lum[base + x] as number;
     }
     // Normaliza pelo painel da janela (mediana), como a razão do sinal principal.
     const painel = Math.max(Uint8Array.from(valores).sort()[n >> 1] as number, FUNDO_MINIMO);
@@ -80,7 +84,7 @@ export class RefinadorRegiao {
   /** Região ajustada, ou null se ainda observando ou se nada pisca na janela. */
   sugerir(): Regiao | null {
     if (this.observadoMs < this.cfg.observarMs || this.quadrosAceso < 10 || this.quadrosApagado < 10) return null;
-    const n = this.lado * this.lado;
+    const n = this.ladoX * this.ladoY;
     const contraste = new Float64Array(n);
     let maior = 0;
     for (let i = 0; i < n; i++) {
@@ -97,8 +101,8 @@ export class RefinadorRegiao {
     for (let i = 0; i < n; i++) {
       const a = contraste[i] as number;
       if (a < maior * this.cfg.corte) continue;
-      const x = (i % this.lado) + 0.5;
-      const y = Math.floor(i / this.lado) + 0.5;
+      const x = (i % this.ladoX) + 0.5;
+      const y = Math.floor(i / this.ladoX) + 0.5;
       sx += x * a;
       sy += y * a;
       sp += a;

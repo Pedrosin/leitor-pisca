@@ -23,13 +23,16 @@ export class LimiarAdaptativo {
   }
 
   atualizar(t: number, valor: number): EstadoLuz {
+    if (!Number.isFinite(t) || !Number.isFinite(valor)) return this.estado;
     if (Number.isNaN(this.alto)) {
       this.alto = valor;
       this.baixo = valor;
       this.tAnterior = t;
       return this.estado;
     }
-    const dt = Math.max(0, t - this.tAnterior);
+    // Tempo que volta não recua a referência: o passo seguinte é medido do último tempo válido.
+    if (!(t > this.tAnterior)) return this.estado;
+    const dt = t - this.tAnterior;
     this.tAnterior = t;
     const ataque = 1 - Math.exp(-dt / this.cfg.tauAtaqueMs);
     const esquece = 1 - Math.exp(-dt / this.cfg.tauEnvelopeMs);

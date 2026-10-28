@@ -150,13 +150,17 @@ export function* gerarQuadros(parcial: Partial<Cena>): Generator<Quadro> {
       ]
     : [];
 
-  let nivelLampada = 0;
-  let ganho = 1;
+  // Começa em regime: se a gravação abre no meio de um pisca, a lâmpada já está acesa e a exposição já
+  // se adaptou (não "acende" no primeiro quadro).
+  const acesoNoInicio = acesoEm(linha, cena.inicioMs);
+  let nivelLampada = acesoNoInicio ? 1 : 0;
+  let ganho = cena.autoExposicao ? (acesoNoInicio ? 0.62 : 1.0) : 1;
   let tAnterior = 0;
   let passeioX = 0;
   let passeioY = 0;
   let proximoBrilho = 1500 + rand() * 3000;
-  let brilhoAte = -1;
+  /** Quadros entregues que ainda vão sair com clarão (conta quadro, não milissegundo). */
+  let brilhoRestante = 0;
   let posRefX = 0;
   let posRefY = 0;
   let velRefX = 0;
@@ -168,7 +172,8 @@ export function* gerarQuadros(parcial: Partial<Cena>): Generator<Quadro> {
     t = Math.max(t, tAnterior + 1);
     const dt = k === 0 ? periodo : t - tAnterior;
     tAnterior = t;
-    if (cena.quedaQuadros > 0 && rand() < cena.quedaQuadros) continue;
+    // A física (lâmpada, exposição, tremida, reflexo) anda em todo passo; o quadro perdido só não é entregue.
+    const perdido = cena.quedaQuadros > 0 && rand() < cena.quedaQuadros;
 
     const aceso = acesoEm(linha, t + cena.inicioMs);
     // Lâmpada incandescente: sobe e desce em ~40 ms.
@@ -206,10 +211,9 @@ export function* gerarQuadros(parcial: Partial<Cena>): Generator<Quadro> {
     }
     if (cena.reflexo) {
       if (t >= proximoBrilho) {
-        brilhoAte = t + periodo * (1 + Math.floor(rand() * 2)) - 1;
+        brilhoRestante = 1 + Math.floor(rand() * 2);
         proximoBrilho = t + 2000 + rand() * 3000;
       }
-      if (t <= brilhoAte) brilhoGlobal = 90;
     }
 
     if (cena.derivaPxPorS > 0) {
@@ -219,6 +223,11 @@ export function* gerarQuadros(parcial: Partial<Cena>): Generator<Quadro> {
       const pos = ida < 24 ? ida - 12 : 36 - ida;
       ox += pos;
       oy += pos * 0.6;
+    }
+    if (perdido) continue;
+    if (brilhoRestante > 0) {
+      brilhoGlobal = 90;
+      brilhoRestante--;
     }
     const lum = new Uint8Array(w * h);
     const lxt = lx + ox;

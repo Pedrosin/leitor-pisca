@@ -91,3 +91,14 @@ Não conferido: cor cinza do SCS em 92–93 (fonte única); airbag no Civic vend
 ## Git
 
 **D19. Autor dos commits: `Victor-Pedroso <70385631+Pedrosin@users.noreply.github.com>`** (pedido da sessão coordenadora, para poder ir ao GitHub). O commit inicial foi reescrito. O histórico antigo está em `Documents/_backup-git/leitor-pisca-antes-email-2026-10-27.bundle`.
+
+## Crítica adversarial (Codex, 2026-10-27)
+
+Nenhum caminho de confirmação errada foi achado. Corrigidos 15 achados (P2/P3), cada um com teste de regressão em `test/regressao.test.ts` quando é do núcleo:
+- Tempo não finito ou fora de ordem: descartado no decodificador, limiar, refinador, detector e busca. `Infinity` congelava a leitura. Ciclo com duração ≤ 0 não confirma.
+- Refinador perto da borda: a janela usava a menor dimensão como quadrado e cortava a lâmpada. Agora largura e altura são independentes.
+- Replay: o prazo do refinamento (20 s) era maior que os quadros guardados (15 s). Ficaram iguais em 15 s.
+- `celulaPx` inválido falha na criação do detector.
+- App: o relógio do quadro é uma linha do tempo própria que anda por passo (câmera ou tela), sem misturar escalas absolutas. "Marcar de novo" limpa piscas e lidos. Wake lock pedido depois da tela fechar é liberado. Falha em `video.play()` agora é erro, e a câmera é fechada.
+- Gerador sintético: o quadro perdido não congela mais a física. Começar no meio do ciclo parte do regime. Clarão conta quadros entregues.
+- Achado meu na mesma rodada: quando a busca automática achava a luz, o mesmo quadro era processado duas vezes e os códigos já confirmados não iam para a tela.

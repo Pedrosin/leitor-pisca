@@ -15,8 +15,8 @@ interface QuadroGuardado {
 
 /** Quadros guardados para reprocessar depois do ajuste. */
 const GUARDAR_MS = 15000;
-/** Sem ajuste até aqui, segue com o toque. */
-const DESISTIR_MS = 20000;
+/** Sem ajuste até aqui, segue com o toque. Não pode passar de GUARDAR_MS, senão o replay sai incompleto. */
+const DESISTIR_MS = GUARDAR_MS;
 /** Janela de cada nova medida de posição durante a leitura. */
 const RASTREIO_MS = 4000;
 /** Rastreio sem resposta por mais que isso (pausa longa, luz apagada) recomeça a medida. */

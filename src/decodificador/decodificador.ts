@@ -78,6 +78,9 @@ export class Decodificador {
 
   /** Um valor de brilho (lâmpada menos fundo) no instante t, em ms. */
   processarAmostra(t: number, valor: number): EstadoLeitura {
+    // Só tempo finito e crescente: quadro repetido, fora de ordem, NaN ou Infinity é descartado
+    // (Infinity gravado em tUltimo congelaria a leitura para sempre).
+    if (!Number.isFinite(t) || !Number.isFinite(valor)) return this.estado();
     if (!Number.isNaN(this.tUltimo) && t <= this.tUltimo) return this.estado();
     this.tUltimo = t;
     this.estadoBruto = this.limiar.atualizar(t, valor);

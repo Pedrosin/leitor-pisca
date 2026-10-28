@@ -34,6 +34,11 @@ export function cicloRepetido(leituras: readonly LeituraDatada[], extras: number
         break;
       }
       const duracao = b.t - a.t;
+      // Ciclo tem que andar para frente no tempo; duração zero, negativa ou NaN não é repetição.
+      if (!(duracao > 0)) {
+        ok = false;
+        break;
+      }
       menor = Math.min(menor, duracao);
       maior = Math.max(maior, duracao);
     }

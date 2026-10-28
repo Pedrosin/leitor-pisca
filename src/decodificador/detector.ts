@@ -79,6 +79,9 @@ export class DetectorPisca {
 
   constructor(cfg: Partial<ConfigDetector> = {}) {
     this.cfg = { ...PADRAO, ...cfg };
+    if (!Number.isInteger(this.cfg.celulaPx) || this.cfg.celulaPx < 1) {
+      throw new RangeError(`celulaPx precisa ser inteiro >= 1 (veio ${this.cfg.celulaPx})`);
+    }
   }
 
   reiniciar(): void {
@@ -86,6 +89,10 @@ export class DetectorPisca {
   }
 
   adicionar(t: number, lum: Uint8Array, largura: number, altura: number): void {
+    if (!Number.isFinite(t)) return;
+    const ultimo = this.quadros[this.quadros.length - 1];
+    // Relógio que volta (fonte reiniciada): a série antiga não vale mais.
+    if (ultimo && t <= ultimo.t) this.quadros = [];
     const c = this.cfg.celulaPx;
     if (largura !== this.largura || altura !== this.altura) {
       this.largura = largura;

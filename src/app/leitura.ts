@@ -32,6 +32,8 @@ export function telaLeitura(nav: Navegar): { el: HTMLElement; parar: () => void 
   let buscador: BuscadorLuz | null = new BuscadorLuz();
   let estado: EstadoLeitor | null = null;
   let achadaSozinha = false;
+  /** O que a busca automática confirmou, mostrado até o Leitor novo confirmar por conta própria. */
+  let confirmadosBusca: number[] | null = null;
   let stream: MediaStream | null = null;
   let ativo = true;
   let travaTela: { release(): Promise<void> } | null = null;
@@ -48,9 +50,12 @@ export function telaLeitura(nav: Navegar): { el: HTMLElement; parar: () => void 
     regiaoTocada = null;
     estado = null;
     achadaSozinha = false;
+    confirmadosBusca = null;
     buscador = new BuscadorLuz();
     ultimosConfirmados = '';
     resultado.replaceChildren();
+    piscas.textContent = '';
+    lidos.textContent = '';
     status.textContent = 'Toque na luz da injeção na imagem.';
     status.className = 'status';
   }
@@ -67,6 +72,7 @@ export function telaLeitura(nav: Navegar): { el: HTMLElement; parar: () => void 
     leitor = new Leitor(regiao, processo.width, processo.height);
     buscador = null;
     achadaSozinha = false;
+    confirmadosBusca = null;
     estado = null;
     ultimosConfirmados = '';
     resultado.replaceChildren();
@@ -91,7 +97,8 @@ export function telaLeitura(nav: Navegar): { el: HTMLElement; parar: () => void 
   function mostrar(): void {
     if (!estado) return;
     const alerta = estado.alertas[0];
-    if (estado.confirmados) {
+    const confirmados = estado.confirmados ?? confirmadosBusca;
+    if (confirmados) {
       status.textContent = achadaSozinha
         ? 'Achei a luz sozinho e li os códigos. Pode continuar lendo para conferir.'
         : 'Leitura confirmada (a lista repetiu igual).';
@@ -110,11 +117,11 @@ export function telaLeitura(nav: Navegar): { el: HTMLElement; parar: () => void 
     const ultimos = estado.lidos.slice(-8).map((c) => (c === null ? '?' : String(c)));
     lidos.textContent = ultimos.length ? `Lidos: ${ultimos.join(' · ')}` : '';
 
-    const chave = estado.confirmados?.join(',') ?? '';
+    const chave = confirmados?.join(',') ?? '';
     if (chave !== ultimosConfirmados) {
       ultimosConfirmados = chave;
       resultado.replaceChildren(
-        ...(estado.confirmados ?? []).map((c) => cartaoCodigo(buscarCodigo(c), 'codigo-confirmado')),
+        ...(confirmados ?? []).map((c) => cartaoCodigo(buscarCodigo(c), 'codigo-confirmado')),
       );
     }
   }
@@ -150,31 +157,31 @@ export function telaLeitura(nav: Navegar): { el: HTMLElement; parar: () => void 
         // A busca já confirmou uma leitura ali: segue lendo nesse ponto.
         leitor = new Leitor(achada, processo.width, processo.height);
         achadaSozinha = true;
+        confirmadosBusca = buscador.confirmados;
         buscador = null;
+        estado = leitor.processarQuadro(t, lum);
       }
-    }
-    if (achadaSozinha && leitor && !estado?.confirmados) {
-      // O Leitor novo recomeça do zero; enquanto isso, mantém o resultado da busca na tela.
-      estado = leitor.processarQuadro(t, lum);
     }
     desenhar();
     mostrar();
   }
 
-  // Relógio do decodificador: mediaTime (instante do quadro na câmera, mais fiel que o da tela), mas
-  // sempre crescente. Se a fonte recomeça (troca de câmera, vídeo em loop), emenda pelo relógio da tela.
-  let deslocamento = 0;
+  // Relógio do decodificador: uma linha do tempo própria, sempre crescente, que anda pelo passo entre
+  // quadros. O passo vem do mediaTime (instante do quadro na câmera, mais fiel que o da tela) quando ele
+  // anda para frente e é plausível; senão (fonte recomeçou, vídeo em loop, mediaTime ausente) vem do
+  // relógio da tela. Nunca mistura as duas escalas de tempo absolutas.
+  let relogio = Number.NaN;
+  let mediaAnterior = Number.NaN;
   let agoraAnterior = Number.NaN;
   function tempoDoQuadro(agora: number, mediaTime: number | undefined): number {
-    const passo = Number.isNaN(agoraAnterior) ? 0 : Math.max(1, agora - agoraAnterior);
+    const passoTela = Number.isNaN(agoraAnterior) ? 0 : agora - agoraAnterior;
+    const temMedia = typeof mediaTime === 'number' && Number.isFinite(mediaTime) && mediaTime > 0;
+    const passoCamera = temMedia && !Number.isNaN(mediaAnterior) ? ((mediaTime as number) - mediaAnterior) * 1000 : Number.NaN;
     agoraAnterior = agora;
-    if (!mediaTime || mediaTime <= 0) return agora;
-    let t = mediaTime * 1000 + deslocamento;
-    if (ultimoT >= 0 && t <= ultimoT) {
-      deslocamento += ultimoT + passo - t;
-      t = ultimoT + passo;
-    }
-    return t;
+    if (temMedia) mediaAnterior = mediaTime as number;
+    const passo = passoCamera > 0 && passoCamera < 1000 ? passoCamera : Math.max(1, passoTela);
+    relogio = Number.isNaN(relogio) ? 0 : relogio + passo;
+    return relogio;
   }
 
   function laco(): void {
@@ -186,7 +193,7 @@ export function telaLeitura(nav: Navegar): { el: HTMLElement; parar: () => void 
       });
     } else {
       requestAnimationFrame((agora) => {
-        aoQuadro(agora);
+        aoQuadro(tempoDoQuadro(agora, undefined));
         laco();
       });
     }
@@ -212,14 +219,26 @@ export function telaLeitura(nav: Navegar): { el: HTMLElement; parar: () => void 
       return;
     }
     video.srcObject = stream;
-    await video.play().catch(() => undefined);
-    status.textContent = 'Toque na luz da injeção na imagem.';
     try {
-      travaTela = await (navigator as Navigator & { wakeLock?: { request(t: 'screen'): Promise<{ release(): Promise<void> }> } }).wakeLock?.request('screen') ?? null;
+      await video.play();
+    } catch {
+      stream.getTracks().forEach((t) => t.stop());
+      stream = null;
+      status.textContent = 'A câmera abriu, mas o vídeo não começou. Toque em Voltar e tente de novo.';
+      status.className = 'status erro';
+      return;
+    }
+    if (!ativo) return;
+    status.textContent = 'Toque na luz da injeção na imagem.';
+    laco();
+    try {
+      const trava = (await (navigator as Navigator & { wakeLock?: { request(t: 'screen'): Promise<{ release(): Promise<void> }> } }).wakeLock?.request('screen')) ?? null;
+      // A tela pode ter sido fechada enquanto o pedido estava pendente.
+      if (ativo) travaTela = trava;
+      else void trava?.release().catch(() => undefined);
     } catch {
       travaTela = null;
     }
-    laco();
   }
 
   function parar(): void {
