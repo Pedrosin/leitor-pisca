@@ -18,6 +18,11 @@ export interface LeituraDatada {
 const TOLERANCIA_MS = 300;
 const TOLERANCIA_FRACAO = 0.06;
 
+/** Duas durações de ciclo batem? (mesma tolerância da confirmação) */
+export function mesmaDuracao(a: number, b: number): boolean {
+  return a > 0 && b > 0 && Math.abs(a - b) <= Math.max(TOLERANCIA_MS, TOLERANCIA_FRACAO * Math.max(a, b));
+}
+
 /** Menor período p tal que os últimos 2p+extras itens se repetem a cada p. Devolve o ciclo ou null. */
 export function cicloRepetido(leituras: readonly LeituraDatada[], extras: number): number[] | null {
   const n = leituras.length;

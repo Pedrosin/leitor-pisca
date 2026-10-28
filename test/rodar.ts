@@ -9,6 +9,8 @@ export interface Resultado {
   confirmouEm: number | null;
   /** Todos os conjuntos que chegaram a ser confirmados, na ordem. */
   confirmacoes: string[];
+  /** O leitor no fim da cena, para pedir o resumo de conferência. */
+  leitor: Leitor;
 }
 
 /** `toque` = deslocamento do dedo em relação ao centro da luz, em fração da largura. */
@@ -31,5 +33,5 @@ export function rodarCena(cena: Partial<Cena>, toque = { dx: 0.02, dy: -0.015, r
     }
   }
   if (!final) throw new Error('cena sem quadros');
-  return { final, confirmouEm, confirmacoes };
+  return { final, confirmouEm, confirmacoes, leitor };
 }

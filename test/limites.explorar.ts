@@ -19,3 +19,17 @@ caso('tudo junto + tremida 6px', { ruido: 8, tremorPx: 6, reflexo: true, autoExp
 for (const d of [0.5, 1]) caso(`deriva ${d} px/s + tremida 2px`, { derivaPxPorS: d, tremorPx: 2, ruido: 6 });
 caso('15 fps', { fps: 15 });
 caso('10 fps', { fps: 10 });
+
+// Cinto aceso fixo colado + faixa do Chrome + auto-exposição (relato de 2026-10-28): taxa de leitura no prazo de 8 ciclos.
+import { CINTO } from './sintetico';
+for (const cods of [[12], [1, 3, 43]]) {
+  let certos = 0;
+  let errados = 0;
+  const cic = linhaDoTempo(cods).cicloMs;
+  for (const semente of [1, 2, 3, 4, 5, 6, 7, 8]) {
+    const r = rodarCena({ faixaVideo: true, vizinha: { ...CINTO, roteiro: [{ ateMs: Infinity, modo: 'acesa' }] }, autoExposicao: true, ruido: 6, tremorPx: 2, fps: 30, codigos: cods, inicioMs: cic * 0.37, duracaoMs: cic * 8 + 2000, semente });
+    if (r.final.confirmados?.join(',') === cods.join(',')) certos++;
+    errados += r.confirmacoes.filter((c) => c !== cods.join(',')).length;
+  }
+  console.log(`cinto fixo + faixa do Chrome [${cods}]`.padEnd(34) + ` certos ${certos}/8  confirmações erradas ${errados}`);
+}

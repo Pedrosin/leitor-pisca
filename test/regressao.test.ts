@@ -5,7 +5,9 @@ import { Decodificador, DetectorPisca, RefinadorRegiao } from '../src/decodifica
 import { cicloRepetido } from '../src/decodificador/ciclos';
 import { LimiarAdaptativo } from '../src/decodificador/limiar';
 import { CONFIG_PADRAO } from '../src/decodificador/config';
-import { linhaDoTempo, acesoEm } from './sintetico';
+import { CINTO, gerarQuadros, linhaDoTempo, acesoEm } from './sintetico';
+import { BuscadorLuz } from '../src/decodificador';
+import { rodarCena } from './rodar';
 
 describe('tempo inválido', () => {
   test('Infinity e NaN não congelam o decodificador', () => {
@@ -75,5 +77,37 @@ describe('refinador na borda da imagem', () => {
 describe('configuração', () => {
   test('celulaPx inválido falha na criação, não no meio da leitura', () => {
     expect(() => new DetectorPisca({ celulaPx: 0 })).toThrow(RangeError);
+  });
+});
+
+describe('luz vizinha forte (cinto) colada na da injeção — relato de 2026-10-28', () => {
+  const codigos = [12, 41];
+  const ciclo = linhaDoTempo(codigos).cicloMs;
+  const cena = { codigos, fps: 30, inicioMs: 3000, duracaoMs: ciclo * 6, ruido: 6, tremorPx: 2, autoExposicao: true };
+
+  // Antes: o detector subtraía a mediana do quadro; com a exposição caindo quando a injeção acende, o cinto
+  // aceso "piscava ao contrário", o candidato pulava entre células e cada pulo recomeçava a leitura.
+  // Resultado medido: 0 de 3 leituras no ponto certo. Depois: razão pela mediana + candidato que só anda.
+  test.each([1, 2, 3])('busca automática lê no ponto certo (semente %i)', (semente) => {
+    const b = new BuscadorLuz();
+    for (const q of gerarQuadros({ ...cena, semente, vizinha: { ...CINTO, roteiro: [{ ateMs: Infinity, modo: 'acesa' as const }] } })) {
+      b.processarQuadro(q.t, q.lum, 160, 120);
+    }
+    expect(b.confirmados).toEqual(codigos);
+    expect(Math.hypot(((b.sugestao?.cx ?? 0) - 0.5) * 160, ((b.sugestao?.cy ?? 0) - 0.5) * 120)).toBeLessThan(5);
+  });
+
+  // Antes: disco inteiro pegava a borda e a borra do cinto; com cinto grande o disco escorregava para ele
+  // (1 de 3). Depois: média ponderada só dos pixels que acendem com a injeção + fundo pelo percentil 30.
+  // Exigência: nunca confirmar errado, e ao encerrar os dois códigos da ECU aparecem com número.
+  // (Na semente 2 o 41 sai descartado em ciclos alternados: não chega a 3 leituras no mesmo ritmo e fica
+  // "visto", que é o aviso de conferir contando. A confirmação automática da lista inteira não fecha.)
+  test.each([1, 2, 3])('toque desviado para o lado do cinto ainda lê (semente %i)', (semente) => {
+    const r = rodarCena({ ...cena, semente, vizinha: { ...CINTO, dx: 3.2, tamanho: 2 } }, { dx: 0.03, dy: 0, raio: 0.07 });
+    expect(r.confirmacoes.filter((c) => c !== codigos.join(','))).toEqual([]);
+    const resumo = r.leitor.resumo().codigos;
+    const confirmados = resumo.filter((c) => c.situacao === 'confirmado').map((c) => c.codigo);
+    expect(confirmados.every((c) => c !== null && codigos.includes(c))).toBe(true);
+    for (const c of codigos) expect(resumo.some((x) => x.codigo === c)).toBe(true);
   });
 });

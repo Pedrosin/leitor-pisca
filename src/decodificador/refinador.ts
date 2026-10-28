@@ -94,17 +94,40 @@ export class RefinadorRegiao {
     }
     // Contraste mínimo: a lâmpada acesa tem que somar 30% do painel. Abaixo disso não confia.
     if (maior < 0.3) return null;
+    // A lâmpada é a mancha conectada (8 vizinhos) que contém o pixel mais forte. Pixel solto que passou
+    // do corte (reflexo, ruído com auto-exposição) fica de fora: sem isso a máscara chegou a 518 px
+    // para uma lâmpada de ~80, e a leitura não fechava.
+    let semente = 0;
+    for (let i = 1; i < n; i++) if ((contraste[i] as number) > (contraste[semente] as number)) semente = i;
+    const limite = maior * this.cfg.corte;
+    const naMancha = new Uint8Array(n);
+    const fila = [semente];
+    naMancha[semente] = 1;
+    while (fila.length > 0) {
+      const i = fila.pop() as number;
+      const x = i % this.ladoX;
+      const y = Math.floor(i / this.ladoX);
+      for (let dy = -1; dy <= 1; dy++) {
+        for (let dx = -1; dx <= 1; dx++) {
+          const xx = x + dx;
+          const yy = y + dy;
+          if (xx < 0 || xx >= this.ladoX || yy < 0 || yy >= this.ladoY) continue;
+          const j = yy * this.ladoX + xx;
+          if (naMancha[j] || (contraste[j] as number) < limite) continue;
+          naMancha[j] = 1;
+          fila.push(j);
+        }
+      }
+    }
     let sx = 0;
     let sy = 0;
     let sp = 0;
     let contagem = 0;
     for (let i = 0; i < n; i++) {
+      if (!naMancha[i]) continue;
       const a = contraste[i] as number;
-      if (a < maior * this.cfg.corte) continue;
-      const x = (i % this.ladoX) + 0.5;
-      const y = Math.floor(i / this.ladoX) + 0.5;
-      sx += x * a;
-      sy += y * a;
+      sx += ((i % this.ladoX) + 0.5) * a;
+      sy += (Math.floor(i / this.ladoX) + 0.5) * a;
       sp += a;
       contagem++;
     }
@@ -113,10 +136,35 @@ export class RefinadorRegiao {
     const cy = this.y0 + sy / sp;
     const raioPx = Math.sqrt(contagem / Math.PI) + this.cfg.folgaPx;
     const tocadaPx = this.tocada.raio * this.largura;
+    // Máscara: peso 1 em toda a mancha, mais 1 px de folga em volta; o resto (luz vizinha, painel,
+    // reflexo) fica zero. Peso uniforme, e não proporcional ao contraste: com a mão tremendo o miolo da
+    // lâmpada anda, e uma média puxada para o miolo perdia pisca (tremida de 6 px: 0 de 6).
+    const valores = new Float32Array(n);
+    for (let i = 0; i < n; i++) {
+      if (!naMancha[i]) continue;
+      const x = i % this.ladoX;
+      const y = Math.floor(i / this.ladoX);
+      for (let dy = -1; dy <= 1; dy++) {
+        for (let dx = -1; dx <= 1; dx++) {
+          const xx = x + dx;
+          const yy = y + dy;
+          if (xx >= 0 && xx < this.ladoX && yy >= 0 && yy < this.ladoY) valores[yy * this.ladoX + xx] = 1;
+        }
+      }
+    }
     return {
       cx: cx / this.largura,
       cy: cy / this.altura,
       raio: Math.min(tocadaPx * 1.5, Math.max(2.5, raioPx)) / this.largura,
+      pesos: {
+        x0: this.x0,
+        y0: this.y0,
+        largura: this.ladoX,
+        altura: this.ladoY,
+        quadroLargura: this.largura,
+        quadroAltura: this.altura,
+        valores,
+      },
     };
   }
 }

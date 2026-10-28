@@ -6,7 +6,7 @@ import { spawn, type ChildProcess } from 'node:child_process';
 import { existsSync, mkdirSync, statSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { chromium, type Page } from 'playwright-core';
-import { gerarQuadros, linhaDoTempo, type Cena } from '../test/sintetico';
+import { CINTO, gerarQuadros, linhaDoTempo, type Cena } from '../test/sintetico';
 import { gravarY4m } from '../test/y4m';
 
 const RAIZ = resolve(import.meta.dirname, '..');
@@ -25,6 +25,8 @@ interface Cenario {
   /** Onde tocar (fração da imagem). null = não toca: prova a busca automática. */
   toque: { cx: number; cy: number } | null;
   prazoMs: number;
+  /** Aperta "Encerrar e conferir" no meio de um código, confere, vê os defeitos e volta a ler. */
+  encerrarNoMeio?: boolean;
 }
 
 const CENARIOS: Cenario[] = [
@@ -39,6 +41,24 @@ const CENARIOS: Cenario[] = [
     cena: { codigos: [3], ruido: 6, tremorPx: 2, luzesConstantes: true, lampada: { cx: 0.35, cy: 0.55, raioPx: 5 } },
     toque: null,
     prazoMs: 150000,
+  },
+  {
+    // Relato do Victor (2026-10-28): luz do cinto colada atrapalhando; e encerrar antes de confirmar.
+    // Cinto aceso fixo (cinto solto): o vídeo roda em loop, e o roteiro "pisca 6 s depois da ignição"
+    // viraria um cinto piscando a cada 30 s, o que não acontece no carro. O pisca do começo está
+    // coberto nos testes do decodificador (test/regressao.test.ts, test/robustez.test.ts).
+    nome: 'cinto-colado-encerrar-no-meio-12-41',
+    cena: {
+      codigos: [12, 41],
+      ruido: 6,
+      tremorPx: 2,
+      autoExposicao: true,
+      vizinha: { ...CINTO, roteiro: [{ ateMs: Infinity, modo: 'acesa' }] },
+      lampada: { cx: 0.5, cy: 0.5, raioPx: 5 },
+    },
+    toque: { cx: 0.52, cy: 0.49 },
+    prazoMs: 180000,
+    encerrarNoMeio: true,
   },
 ];
 
@@ -101,8 +121,16 @@ async function rodar(c: Cenario, video: string): Promise<boolean> {
       const caixa = await camera.boundingBox();
       if (!caixa) throw new Error('canvas sem caixa');
       await page.mouse.click(caixa.x + c.toque.cx * caixa.width, caixa.y + c.toque.cy * caixa.height);
+    } else {
+      // Busca automática: o app aponta a luz e pergunta; nenhum código aparece antes do "sim".
+      await page.getByTestId('usar-luz-achada').waitFor({ state: 'visible', timeout: c.prazoMs });
+      const antes = await page.$$eval('[data-testid=codigo-confirmado]', (els) => els.length);
+      console.log(`  pergunta "é a luz da injeção?" apareceu; códigos na tela antes do sim: ${antes}`);
+      if (antes > 0) return false;
+      await page.getByTestId('usar-luz-achada').click();
     }
     const esperado = [...c.cena.codigos].sort((a, b) => a - b).map(String);
+    if (c.encerrarNoMeio && !(await encerrarConferirEVoltar(page, esperado))) return false;
     const vistos = new Set<string>();
     const inicio = Date.now();
     let ultimo: Lido = { status: '', confirmados: [], lidos: '' };
@@ -126,6 +154,65 @@ async function rodar(c: Cenario, video: string): Promise<boolean> {
   } finally {
     await navegador.close();
   }
+}
+
+/**
+ * Espera ler pelo menos um código, espera um código começar a piscar (meio de ciclo) e aperta
+ * "Encerrar e conferir". Confere pelo DOM: todo número mostrado é um dos esperados, código cortado
+ * aparece sem número, cada linha tem o mapa de piscas. Confirma, vê os defeitos, volta a ler.
+ */
+async function encerrarConferirEVoltar(page: Page, esperado: string[]): Promise<boolean> {
+  const inicio = Date.now();
+  await page.waitForFunction(
+    (codigos) => {
+      const t = document.querySelector('[data-testid=lidos]')?.textContent ?? '';
+      const lidos = t.replace('Lidos:', '').split('·').map((x) => x.trim());
+      return codigos.some((c) => lidos.includes(c));
+    },
+    esperado,
+    { timeout: 120000, polling: 250 },
+  );
+  // Meio de ciclo: um código está piscando agora (o desenho ao vivo tem pisca).
+  await page.waitForFunction(() => (document.querySelector('[data-testid=piscas]')?.textContent ?? '').length > 0, null, {
+    timeout: 30000,
+    polling: 50,
+  });
+  await page.getByTestId('encerrar').click();
+  const linhas = await page.$$eval('[data-testid=codigo-conferido]', (els) =>
+    els.map((e) => ({
+      codigo: e.getAttribute('data-codigo') ?? '',
+      situacao: e.getAttribute('data-situacao') ?? '',
+      numero: e.querySelector('.numero')?.textContent ?? '',
+      mapa: e.querySelector('.mapa-texto')?.textContent ?? '',
+      desenho: e.querySelector('.mapa .piscas')?.textContent ?? '',
+    })),
+  );
+  const confirmados = linhas.filter((l) => l.situacao === 'confirmado');
+  const vistos = linhas.filter((l) => l.situacao === 'visto');
+  const incompletos = linhas.filter((l) => l.situacao === 'incompleto');
+  const erros: string[] = [];
+  if (confirmados.length + vistos.length === 0) erros.push('nenhum código com número na conferência');
+  for (const l of confirmados) if (!esperado.includes(l.codigo)) erros.push(`código errado CONFIRMADO: ${l.codigo}`);
+  // "Visto 1 vez" é o aviso de conferir contando; a pessoa desmarca o que não bate com o painel.
+  const vistosErrados = vistos.filter((l) => !esperado.includes(l.codigo)).map((l) => l.codigo);
+  for (const codigo of vistosErrados) {
+    await page.locator(`[data-testid=codigo-conferido][data-codigo="${codigo}"] [data-testid=usar-codigo]`).uncheck();
+  }
+  for (const l of incompletos) if (l.codigo !== '' || /\d/.test(l.numero)) erros.push(`incompleto com número: ${l.numero}`);
+  for (const l of linhas) if (!l.mapa || !l.desenho) erros.push(`linha sem mapa de piscas: ${l.numero}`);
+  await page.getByTestId('confirmar-conferencia').click();
+  const defeitos = await page.$$eval('[data-testid=codigo-defeito]', (els) => els.map((e) => e.getAttribute('data-codigo') ?? ''));
+  const marcados = [...confirmados, ...vistos].map((l) => l.codigo).filter((c) => !vistosErrados.includes(c));
+  if (defeitos.join(',') !== marcados.join(',')) erros.push(`defeitos [${defeitos.join(', ')}] ≠ marcados [${marcados.join(', ')}]`);
+  await page.getByTestId('voltar-a-ler').click();
+  const capturaVisivel = await page.getByTestId('captura').isVisible();
+  if (!capturaVisivel) erros.push('captura não voltou');
+  console.log(`  ${erros.length ? 'FALHOU' : 'ok'} encerrar no meio após ${((Date.now() - inicio) / 1000).toFixed(1)} s`);
+  for (const l of linhas) console.log(`    conferência: ${l.numero.padEnd(3)} ${l.situacao.padEnd(11)} ${l.desenho}  (${l.mapa})`);
+  if (vistosErrados.length) console.log(`    desmarcados (vistos 1 vez que não são da ECU): [${vistosErrados.join(', ')}]`);
+  console.log(`    defeitos mostrados: [${defeitos.join(', ')}]`);
+  for (const e of erros) console.log(`    ERRO: ${e}`);
+  return erros.length === 0;
 }
 
 async function main(): Promise<void> {

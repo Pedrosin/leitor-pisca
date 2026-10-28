@@ -43,6 +43,7 @@ export function telaInicio(nav: Navegar): HTMLElement {
       botao('Tabela de códigos', nav.tabela),
     ),
     h('p', { class: 'nota' }, 'Primeira vez? Leia "Como preparar o carro": o jumper vai num conector específico e há conectores do airbag por perto.'),
+    h('p', { class: 'versao', 'data-testid': 'versao' }, `versão ${__VERSAO__}`),
   );
 }
 
@@ -75,6 +76,12 @@ export function telaPreparar(nav: Navegar): HTMLElement {
       ),
       h('li', {}, h('strong', {}, 'Ligue os 2 pinos do SCS '), 'com um clipe de papel aberto ou um pedaço de fio, ainda com a ignição desligada.'),
       h('li', {}, h('strong', {}, 'Gire a chave para ON '), '(segunda posição, painel aceso). ', h('strong', {}, 'Não dê partida.')),
+      h(
+        'li',
+        {},
+        h('strong', {}, 'Afivele o cinto '),
+        '(ou espere a luz dele parar de piscar). Luz forte acesa ou piscando colada na da injeção atrasa a leitura.',
+      ),
       h(
         'li',
         {},

@@ -1,8 +1,11 @@
 // Apoio ao toque: acha no quadro o ponto que pisca no ritmo da ECU.
-// Divide a imagem em células, guarda alguns segundos do brilho de cada uma (menos a mediana do quadro,
-// para a auto-exposição não contar) e pontua quem acende e apaga com duração de pisca.
+// Divide a imagem em células, guarda alguns segundos do brilho de cada uma (em % da mediana do quadro,
+// para a auto-exposição não contar: com diferença, uma luz forte acesa direto "piscava ao contrário"
+// quando a exposição caía junto com a injeção) e pontua quem acende e apaga com duração de pisca.
 // Pisca é onda quadrada: quase todo quadro está perto do nível aceso ou do apagado. Tremida e reflexo
 // variam de forma contínua e passam boa parte do tempo no meio; a "quadratura" separa os dois.
+
+import { FUNDO_MINIMO } from './amostragem';
 
 export interface Sugestao {
   cx: number;
@@ -27,7 +30,7 @@ export interface ConfigDetector {
 const PADRAO: ConfigDetector = {
   celulaPx: 8,
   janelaMs: 15000,
-  amplitudeMinima: 6,
+  amplitudeMinima: 20,
   piscaMinMs: 150,
   piscaMaxMs: 2500,
   quadraturaMinima: 0.7,
@@ -125,7 +128,8 @@ export class DetectorPisca {
     }
     const ordenados = Float32Array.from(valores).sort();
     const mediana = ordenados[n >> 1] ?? 0;
-    for (let i = 0; i < n; i++) valores[i] = (valores[i] as number) - mediana;
+    const base = Math.max(mediana, FUNDO_MINIMO);
+    for (let i = 0; i < n; i++) valores[i] = (100 * (valores[i] as number)) / base;
 
     this.quadros.push({ t, valores });
     while (this.quadros.length > 0 && t - (this.quadros[0] as QuadroCelulas).t > this.cfg.janelaMs) {

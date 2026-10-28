@@ -3,7 +3,7 @@
 // Depois disso segue rastreando: a cada poucos segundos mede de novo onde a lâmpada está e move o disco,
 // porque o celular na mão deriva devagar (braço cede) e um disco parado perde a lâmpada em ~1 min.
 
-import { Decodificador, type EstadoLeitura } from './decodificador';
+import { Decodificador, type EstadoLeitura, type ResumoLeitura } from './decodificador';
 import type { ConfigDecodificador } from './config';
 import { RefinadorRegiao } from './refinador';
 import type { Regiao } from './amostragem';
@@ -69,6 +69,16 @@ export class Leitor {
     return { ...estado, regiao: this.regiao, regiaoRefinada: this.refinada };
   }
 
+  /** O que foi lido até aqui, para conferir antes da confirmação automática. */
+  resumo(): ResumoLeitura {
+    return this.decodificador.resumo();
+  }
+
+  /** Pausa (encerrou para conferir e voltou a ler): descarta o código em andamento, mantém o resto. */
+  interromper(): void {
+    this.decodificador.interromper();
+  }
+
   private novoRastreador(): RefinadorRegiao {
     const r = this.regiao;
     return new RefinadorRegiao({ ...r, raio: Math.max(r.raio, RASTREIO_RAIO_MINIMO) }, this.largura, this.altura, {
@@ -82,7 +92,7 @@ export class Leitor {
     const nova = rastreador.sugerir();
     if (nova) {
       // Move o centro; o raio só cresce rápido e encolhe devagar, para uma medida ruim não estreitar o disco.
-      this.regiao = { cx: nova.cx, cy: nova.cy, raio: Math.min(RAIO_MAXIMO, Math.max(nova.raio, this.regiao.raio * 0.9)) };
+      this.regiao = { ...nova, raio: Math.min(RAIO_MAXIMO, Math.max(nova.raio, this.regiao.raio * 0.9)) };
       this.rastreador = this.novoRastreador();
     } else if (rastreador.observadoMs >= RASTREIO_DESISTIR_MS) {
       this.rastreador = this.novoRastreador();

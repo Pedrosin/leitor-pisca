@@ -31,18 +31,28 @@ describe('detector automático', () => {
 
 describe('busca automática (detector + confirmação pelo decodificador)', () => {
   // O detector sozinho é frouxo de propósito (aponta reflexo em cena sem pisca); a busca só sugere
-  // depois que o decodificador confirma uma leitura no ponto. Exigência: nunca apontar sem pisca.
-  test.each([
-    [21, true],
-    [22, true],
-    [23, true],
-    [24, 'periodico'],
-    [25, 'periodico'],
-    [26, 'periodico'],
-  ] as const)('sem nada piscando, nunca sugere (semente %i, reflexo %s)', (semente, reflexo) => {
+  // depois que um Leitor confirma uma leitura no ponto. Reflexo aleatório: nunca sugere.
+  test.each([21, 22, 23])('sem nada piscando, reflexo aleatório: nunca sugere (semente %i)', (semente) => {
     const b = new BuscadorLuz();
-    for (const q of gerarQuadros({ ...RUIM, reflexo, codigos: [], duracaoMs: 90000, semente })) b.processarQuadro(q.t, q.lum, 160, 120);
+    for (const q of gerarQuadros({ ...RUIM, reflexo: true, codigos: [], duracaoMs: 90000, semente })) b.processarQuadro(q.t, q.lum, 160, 120);
     expect(b.sugestao).toBeNull();
+  });
+
+  // Reflexo que vai e volta em ritmo fixo pode imitar um código (1–2 em 40 cenas). Por isso a sugestão é
+  // uma pergunta no app; aqui a prova é que "não é essa" tira o ponto e ele não volta.
+  test.each([24, 25, 26])('reflexo periódico: ponto recusado não volta a ser sugerido (semente %i)', (semente) => {
+    const b = new BuscadorLuz();
+    const recusados: Array<{ cx: number; cy: number }> = [];
+    for (const q of gerarQuadros({ ...RUIM, reflexo: 'periodico', codigos: [], duracaoMs: 120000, semente })) {
+      b.processarQuadro(q.t, q.lum, 160, 120);
+      const s = b.sugestao;
+      if (s) {
+        for (const r of recusados) expect(Math.hypot((s.cx - r.cx) * 160, (s.cy - r.cy) * 120)).toBeGreaterThan(160 * 0.08);
+        recusados.push({ cx: s.cx, cy: s.cy });
+        b.recusar();
+      }
+    }
+    expect(recusados.length).toBeLessThanOrEqual(1);
   });
 
   test.each([

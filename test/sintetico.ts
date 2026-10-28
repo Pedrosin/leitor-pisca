@@ -88,7 +88,18 @@ export interface Cena {
   reflexo: boolean | 'periodico';
   autoExposicao: boolean;
   luzesConstantes: boolean;
+  /**
+   * Uma luz vizinha grande e forte (ex.: cinto de segurança), com borra de brilho em volta (a câmera
+   * "estoura" luz forte no escuro) e roteiro no tempo: cada trecho vale até `ateMs` (tempo da gravação).
+   * Posição em raios da lâmpada da injeção, a partir do centro dela.
+   */
+  vizinha: Vizinha | null;
   jitterMs: number;
+  /**
+   * Converte a saída como o Chrome faz com o vídeo da câmera: luminância de 16–235 esticada para 0–255.
+   * Painel escuro vai para perto de zero (foi o que derrubou a leitura no E2E com o cinto aceso).
+   */
+  faixaVideo: boolean;
   /** Probabilidade de a câmera perder um quadro. */
   quedaQuadros: number;
   semente: number;
@@ -109,10 +120,41 @@ export const CENA_PADRAO: Cena = {
   reflexo: false,
   autoExposicao: false,
   luzesConstantes: false,
+  vizinha: null,
   jitterMs: 0,
   quedaQuadros: 0,
+  faixaVideo: false,
   semente: 1,
 };
+
+export interface Vizinha {
+  dx: number;
+  dy: number;
+  /** Raio em múltiplos do raio da lâmpada da injeção. */
+  tamanho: number;
+  nivel: number;
+  roteiro: Array<{ ateMs: number; modo: 'acesa' | 'apagada' | 'pisca'; periodoMs?: number }>;
+}
+
+/** Cinto: pisca ~6 s depois da ignição e fica aceso (cinto solto). Ícone maior e mais forte que o da injeção. */
+export const CINTO: Vizinha = {
+  dx: 2.6,
+  dy: 0,
+  tamanho: 1.4,
+  nivel: 250,
+  roteiro: [
+    { ateMs: 6000, modo: 'pisca', periodoMs: 1000 },
+    { ateMs: Infinity, modo: 'acesa' },
+  ],
+};
+
+export function vizinhaAcesa(v: Vizinha, t: number): boolean {
+  const trecho = v.roteiro.find((r) => t < r.ateMs) ?? v.roteiro[v.roteiro.length - 1];
+  if (!trecho || trecho.modo === 'apagada') return false;
+  if (trecho.modo === 'acesa') return true;
+  const p = trecho.periodoMs ?? 1000;
+  return t % p < p / 2;
+}
 
 export interface Quadro {
   t: number;
@@ -155,6 +197,7 @@ export function* gerarQuadros(parcial: Partial<Cena>): Generator<Quadro> {
   const acesoNoInicio = acesoEm(linha, cena.inicioMs);
   let nivelLampada = acesoNoInicio ? 1 : 0;
   let ganho = cena.autoExposicao ? (acesoNoInicio ? 0.62 : 1.0) : 1;
+  let nivelVizinha = cena.vizinha && vizinhaAcesa(cena.vizinha, 0) ? 1 : 0;
   let tAnterior = 0;
   let passeioX = 0;
   let passeioY = 0;
@@ -179,8 +222,11 @@ export function* gerarQuadros(parcial: Partial<Cena>): Generator<Quadro> {
     // Lâmpada incandescente: sobe e desce em ~40 ms.
     nivelLampada += ((aceso ? 1 : 0) - nivelLampada) * (1 - Math.exp(-dt / 40));
 
+    const vizAcesa = cena.vizinha ? vizinhaAcesa(cena.vizinha, t) : false;
+    nivelVizinha += ((vizAcesa ? 1 : 0) - nivelVizinha) * (1 - Math.exp(-dt / 40));
     if (cena.autoExposicao) {
-      const alvo = (aceso ? 0.62 : 1.0) * (1 + 0.15 * Math.sin((2 * Math.PI * t) / 7000));
+      // A vizinha forte também puxa a exposição para baixo quando acende.
+      const alvo = (aceso ? 0.62 : 1.0) * (vizAcesa ? 0.75 : 1) * (1 + 0.15 * Math.sin((2 * Math.PI * t) / 7000));
       ganho += (alvo - ganho) * (1 - Math.exp(-dt / 350));
     }
 
@@ -244,6 +290,16 @@ export function* gerarQuadros(parcial: Partial<Cena>): Generator<Quadro> {
           const cc = cobertura(px - (cx + ox), py - (cy + oy), r * 0.9);
           if (cc > 0) v = v * (1 - cc) + cc * nivel;
         }
+        if (cena.vizinha && nivelVizinha > 0.01) {
+          const vz = cena.vizinha;
+          const rv = r * vz.tamanho;
+          const dxv = px - (lx + vz.dx * r + ox);
+          const dyv = py - (ly + vz.dy * r + oy);
+          const cv = cobertura(dxv, dyv, rv);
+          if (cv > 0) v = v * (1 - cv * nivelVizinha) + cv * nivelVizinha * vz.nivel;
+          // Borra: brilho espalhado em volta, como a câmera estoura luz forte no escuro.
+          v += 45 * nivelVizinha * Math.exp(-(dxv * dxv + dyv * dyv) / (2 * (rv * 1.3) ** 2));
+        }
         if (cena.reflexo) {
           const dx = (px - (refX + ox)) / (r * 1.6);
           const dy = (py - (refY + oy)) / (r * 1.0);
@@ -252,6 +308,7 @@ export function* gerarQuadros(parcial: Partial<Cena>): Generator<Quadro> {
         }
         v *= ganho;
         if (cena.ruido > 0) v += gaussiano(rand) * cena.ruido;
+        if (cena.faixaVideo) v = ((v - 16) * 255) / 219;
         lum[y * w + x] = v < 0 ? 0 : v > 255 ? 255 : v;
       }
     }

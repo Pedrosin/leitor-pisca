@@ -226,3 +226,54 @@ ol.passos li {
 .erro {
   color: var(--perigo);
 }
+
+[hidden] {
+  display: none !important;
+}
+
+.mapa {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 12px;
+}
+
+.mapa .piscas {
+  min-height: 0;
+}
+
+.mapa-texto {
+  color: var(--texto-2);
+}
+
+.conferido .situacao {
+  margin: 6px 0 0;
+}
+
+.conferido.incompleto .numero {
+  color: var(--texto-2);
+}
+
+.usar {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+}
+
+.usar input {
+  width: 22px;
+  height: 22px;
+  accent-color: var(--ambar);
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.versao {
+  color: var(--texto-2);
+  font-size: 0.8rem;
+  margin-top: 32px;
+}
