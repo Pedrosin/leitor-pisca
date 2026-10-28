@@ -96,12 +96,21 @@ export class BuscadorLuz {
     this.detector.adicionar(t, lum, largura, altura);
     if (Number.isNaN(this.ultimaConsulta) || t - this.ultimaConsulta >= CONSULTA_MS) {
       this.ultimaConsulta = t;
-      const s = this.detector.sugerir();
+      const s = this.detector.sugerir(this.recusados, MESMO_PONTO * 2);
       if (s) this.considerar({ cx: s.cx, cy: s.cy, raio: Math.max(RAIO_MINIMO, s.raio) }, largura, altura);
     }
     if (!this.candidato || !this.leitor) return;
     const e = this.leitor.processarQuadro(t, lum);
     if (e.confirmados) {
+      // O refinador pode puxar um candidato vizinho de volta para a lâmpada recusada: confere a posição
+      // final, não só o palpite do detector. Caiu num recusado = descarta em silêncio e segue procurando.
+      const perto = (r: Regiao) => Math.hypot(e.regiao.cx - r.cx, ((e.regiao.cy - r.cy) * altura) / largura) <= MESMO_PONTO * 2;
+      if (this.recusados.some(perto)) {
+        if (this.candidato) this.recusados.push(this.candidato);
+        this.candidato = null;
+        this.leitor = null;
+        return;
+      }
       // Ponto achado = a região refinada pelo Leitor (centrada na lâmpada), não o palpite do detector.
       this.achada = { cx: e.regiao.cx, cy: e.regiao.cy, raio: e.regiao.raio, confianca: 1 };
       this.lidosNaBusca = e.confirmados;

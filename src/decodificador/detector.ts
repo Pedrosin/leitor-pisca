@@ -179,13 +179,24 @@ export class DetectorPisca {
     return { pontos: amplitude * Math.min(validos, 6), validos };
   }
 
-  sugerir(): Sugestao | null {
+  /**
+   * Melhor ponto que pisca. `excluir`: regiões (normalizadas) recusadas pela pessoa; células a menos de
+   * `distanciaExcluir` (fração da largura) delas não concorrem, para um ponto forte recusado não esconder
+   * a luz da injeção mais fraca.
+   */
+  sugerir(excluir: ReadonlyArray<{ cx: number; cy: number }> = [], distanciaExcluir = 0.08): Sugestao | null {
     if (this.quadros.length < 10) return null;
     const n = this.colunas * this.linhas;
     const pontos = new Float32Array(n);
     let melhor = -1;
     let melhorValidos = 0;
+    const c0 = this.cfg.celulaPx;
     for (let i = 0; i < n; i++) {
+      const cxCel = ((i % this.colunas) + 1) * c0;
+      const cyCel = (Math.floor(i / this.colunas) + 1) * c0;
+      if (excluir.some((e) => Math.hypot(cxCel - e.cx * this.largura, cyCel - e.cy * this.altura) <= distanciaExcluir * this.largura)) {
+        continue;
+      }
       const r = this.pontuar(i);
       pontos[i] = r.pontos;
       if (r.pontos > 0 && (melhor < 0 || r.pontos > (pontos[melhor] as number))) {

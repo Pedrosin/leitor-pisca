@@ -296,6 +296,11 @@ export class Decodificador {
     this.acesoDesde = Number.NaN;
     this.ultimaDescida = Number.NaN;
     this.luzConstante = false;
+    // A pausa antes do primeiro pisca precisa ser vista de novo depois da volta; sem isso, voltar com a
+    // luz acesa reaproveitava a observação antiga e um código cortado podia sair como número.
+    this.tPrimeiro = Number.NaN;
+    this.preMin = Infinity;
+    this.preMax = -Infinity;
   }
 
   estado(): EstadoLeitura {

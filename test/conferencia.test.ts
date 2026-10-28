@@ -106,6 +106,25 @@ describe('voltar a ler depois de encerrar', () => {
   });
 });
 
+describe('voltar a ler com a luz acesa no meio de um código (achado do Codex, 2026-10-28)', () => {
+  test('o resto do código cortado nunca vira número', () => {
+    const codigos = [43];
+    const linha = linhaDoTempo(codigos);
+    const dec = new Decodificador();
+    // Lê um ciclo inteiro e para logo no começo do 3º longo do 43 seguinte (luz acesa), volta na hora.
+    // O resto (2 longos + 3 curtos) seria um "23" válido se fosse aceito como código inteiro.
+    const para = linha.cicloMs + 2 * (T.longoMs + T.entrePiscasMs) + 150;
+    let t = 0;
+    for (; t < para; t += 33) dec.processarAmostra(t, acesoEm(linha, t) ? 400 : 110);
+    expect(acesoEm(linha, t)).toBe(true);
+    dec.interromper();
+    // Continua até antes do 43 seguinte começar: só o resto cortado (2 longos + 3 curtos) passa.
+    for (const fim = 2 * linha.cicloMs - 200; t < fim; t += 33) dec.processarAmostra(t, acesoEm(linha, t) ? 400 : 110);
+    const numeros = dec.resumo().codigos.filter((c) => c.codigo !== null).map((c) => c.codigo);
+    expect(numeros.every((c) => c === 43)).toBe(true);
+  });
+});
+
 describe('encerrar pelo caminho completo (vídeo sintético + toque)', () => {
   test.each([0.35, 0.6, 0.85])('encerrar a %f de um ciclo nunca mostra código errado como número', (fracao) => {
     const codigos = [12, 41];

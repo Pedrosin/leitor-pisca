@@ -6,7 +6,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { BuscadorLuz, DetectorPisca, Leitor } from '../src/decodificador';
-import { gerarQuadros, linhaDoTempo, type Cena } from './sintetico';
+import { CINTO, gerarQuadros, linhaDoTempo, type Cena } from './sintetico';
 import { gravarY4m, lerY4m } from './y4m';
 
 const RUIM: Partial<Cena> = { ruido: 8, tremorPx: 3, reflexo: true, autoExposicao: true, luzesConstantes: true };
@@ -39,20 +39,42 @@ describe('busca automática (detector + confirmação pelo decodificador)', () =
   });
 
   // Reflexo que vai e volta em ritmo fixo pode imitar um código (1–2 em 40 cenas). Por isso a sugestão é
-  // uma pergunta no app; aqui a prova é que "não é essa" tira o ponto e ele não volta.
-  test.each([24, 25, 26])('reflexo periódico: ponto recusado não volta a ser sugerido (semente %i)', (semente) => {
+  // uma pergunta no app. Prova de que "não é essa" funciona: numa cena com a luz de verdade, a busca acha,
+  // a pessoa recusa, e o ponto recusado nunca volta (exige que a recusa aconteça de fato).
+  test('ponto recusado não volta a ser sugerido', () => {
     const b = new BuscadorLuz();
-    const recusados: Array<{ cx: number; cy: number }> = [];
-    for (const q of gerarQuadros({ ...RUIM, reflexo: 'periodico', codigos: [], duracaoMs: 120000, semente })) {
+    let recusado: { cx: number; cy: number } | null = null;
+    let voltou = false;
+    for (const q of gerarQuadros({ ...RUIM, codigos: [12], lampada: { cx: 0.5, cy: 0.5, raioPx: 5 }, duracaoMs: 120000, semente: 9 })) {
       b.processarQuadro(q.t, q.lum, 160, 120);
       const s = b.sugestao;
-      if (s) {
-        for (const r of recusados) expect(Math.hypot((s.cx - r.cx) * 160, (s.cy - r.cy) * 120)).toBeGreaterThan(160 * 0.08);
-        recusados.push({ cx: s.cx, cy: s.cy });
+      if (!s) continue;
+      if (!recusado) {
+        recusado = { cx: s.cx, cy: s.cy };
         b.recusar();
+      } else if (Math.hypot((s.cx - recusado.cx) * 160, (s.cy - recusado.cy) * 120) <= 160 * 0.08) {
+        voltou = true;
       }
     }
-    expect(recusados.length).toBeLessThanOrEqual(1);
+    expect(recusado).not.toBeNull();
+    expect(voltou).toBe(false);
+  });
+
+  // Um ponto forte recusado não pode esconder outro ponto que pisca (achado do Codex, 2026-10-28).
+  test('detector com o ponto mais forte excluído aponta o outro', () => {
+    const d = new DetectorPisca();
+    const cintoPiscando = { ...CINTO, dx: 6, roteiro: [{ ateMs: Infinity, modo: 'pisca' as const, periodoMs: 1000 }] };
+    for (const q of gerarQuadros({ ruido: 6, codigos: [12], vizinha: cintoPiscando, lampada: { cx: 0.4, cy: 0.5, raioPx: 5 }, duracaoMs: 16000, semente: 3 })) {
+      d.adicionar(q.t, q.lum, 160, 120);
+    }
+    const primeiro = d.sugerir();
+    expect(primeiro).not.toBeNull();
+    const segundo = d.sugerir([primeiro!]);
+    expect(segundo).not.toBeNull();
+    expect(Math.hypot((segundo!.cx - primeiro!.cx) * 160, (segundo!.cy - primeiro!.cy) * 120)).toBeGreaterThan(160 * 0.08);
+    // Um dos dois é a luz da injeção.
+    const naInjecao = [primeiro!, segundo!].some((s) => Math.hypot((s.cx - 0.4) * 160, (s.cy - 0.5) * 120) < 6);
+    expect(naInjecao).toBe(true);
   });
 
   test.each([

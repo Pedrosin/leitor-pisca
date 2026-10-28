@@ -142,7 +142,20 @@ Agora a busca só aponta: "Achei uma luz piscando no círculo tracejado. É a lu
 - A versão aparece no rodapé da tela inicial.
 - Exceção única: o celular que tem a versão anterior (service worker antigo, cache primeiro) ainda abre a velha uma vez. Fechar e abrir de novo resolve, e daí em diante é automático.
 
-**Limites medidos nesta rodada** (`test/limites.explorar.ts`):
-- cinto fixo colado com a faixa do Chrome: [12] 4/8 e [1, 3, 43] 8/8 com piso 12 (antes do ajuste fino); 0 confirmações erradas;
+**Limites medidos nesta rodada** (`test/limites.explorar.ts`, piso 12, 8 sementes, prazo de 8 ciclos):
+- cinto aceso fixo colado com a faixa do Chrome: [12] 8/8 e [1, 3, 43] 3/8;
+- "tudo junto" + tremida 6 px: 3/4 (era 4/4);
 - deriva de 1 px/s: 0/4, com 1 confirmação errada (era 2/4 com 1 errada);
-- o resto ficou igual ao da entrega anterior.
+- o resto ficou igual ao da entrega anterior;
+- nenhuma confirmação errada em nenhum cenário fora a deriva extrema.
+Onde não fecha no prazo, o botão "Encerrar e conferir" mostra o que foi visto, marcado como visto ou confirmado. A suíte (`robustez.test.ts`) usa outras sementes e passa 97/97.
+
+## Crítica adversarial da rodada 2 (Codex, 2026-10-28)
+
+Os 6 achados procediam e foram corrigidos:
+- "Voltar a ler" com a pergunta da busca aberta: o "sim" usava o buscador antigo. Agora a pergunta é fechada sempre que o buscador é trocado.
+- `interromper()` não zerava a observação de antes do primeiro pisca. Voltando com a luz acesa no começo de um longo, o resto de um 43 saía como "23". Corrigido. O teste em `conferencia.test.ts` falha sem a correção (conferido).
+- Ponto recusado na busca bloqueava os outros. O detector agora pula regiões excluídas. E, achado ao testar: o refinador podia puxar um candidato vizinho de volta para a lâmpada recusada, então a posição final também é conferida.
+- O service worker apagava caches de outros apps da mesma origem (pedrosin.github.io). Agora só apaga os `leitor-pisca-*`.
+- A gravação no cache não segurava o evento (`waitUntil`).
+- O teste de recusa podia passar sem recusar nada. Agora exige que a recusa aconteça.

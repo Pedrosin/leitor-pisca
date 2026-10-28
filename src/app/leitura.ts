@@ -219,7 +219,11 @@ export function telaLeitura(nav: Navegar): { el: HTMLElement; parar: () => void 
       // A região é normalizada (0..1), então o toque continua valendo no tamanho novo.
       if (leitor) leitor = new Leitor(estado?.regiao ?? regiaoTocada ?? { cx: 0.5, cy: 0.5, raio: RAIO_TOQUE }, LARGURA_PROCESSO, altura);
       else status.textContent = 'Toque na luz da injeção na imagem.';
-      if (buscador) buscador = new BuscadorLuz();
+      if (buscador) {
+        // Pergunta aberta é do buscador antigo; o "sim" leria o ponto dele, não o desenhado.
+        esconderPergunta();
+        buscador = new BuscadorLuz();
+      }
       estado = null;
     }
     ctxProcesso.drawImage(video, 0, 0, processo.width, processo.height);
@@ -393,7 +397,10 @@ export function telaLeitura(nav: Navegar): { el: HTMLElement; parar: () => void 
   function voltarALer(): void {
     // O código que estava piscando quando encerrou fica cortado: descarta e segue com o resto.
     leitor?.interromper();
-    if (buscador) buscador = new BuscadorLuz();
+    if (buscador) {
+      esconderPergunta();
+      buscador = new BuscadorLuz();
+    }
     conferencia.hidden = true;
     conferencia.replaceChildren();
     captura.hidden = false;

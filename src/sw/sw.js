@@ -16,7 +16,8 @@ self.addEventListener('activate', (e) => {
   e.waitUntil(
     caches
       .keys()
-      .then((chaves) => Promise.all(chaves.filter((k) => k !== CACHE).map((k) => caches.delete(k))))
+      // Só os caches deste app: a origem (pedrosin.github.io) é dividida com outros projetos.
+      .then((chaves) => Promise.all(chaves.filter((k) => k.startsWith('leitor-pisca-') && k !== CACHE).map((k) => caches.delete(k))))
       .then(() => self.clients.claim()),
   );
 });
@@ -30,7 +31,8 @@ self.addEventListener('fetch', (e) => {
     e.respondWith(
       fetch(req, { cache: 'no-store' })
         .then((r) => {
-          if (r.ok) caches.open(CACHE).then((c) => c.put(req, r.clone()));
+          // waitUntil: o worker não pode ser encerrado antes de gravar, senão a abertura sem rede falha.
+          if (r.ok) e.waitUntil(caches.open(CACHE).then((c) => c.put(req, r.clone())));
           return r;
         })
         .catch(() => caches.match(req, { ignoreSearch: true }).then((r) => r || caches.match('./index.html'))),
@@ -42,7 +44,7 @@ self.addEventListener('fetch', (e) => {
       const salvo = await cache.match(req, { ignoreSearch: true });
       if (salvo) return salvo;
       const r = await fetch(req);
-      if (r.ok) cache.put(req, r.clone());
+      if (r.ok) e.waitUntil(cache.put(req, r.clone()));
       return r;
     }),
   );
