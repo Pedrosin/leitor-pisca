@@ -9,7 +9,7 @@
     "preview": "vite preview",
     "celular": "vite build && vite preview --host --mode https",
     "test": "vitest run",
-    "e2e": "vite build && node e2e/e2e.mjs",
+    "e2e": "vite build && vite-node e2e/e2e.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.decodificador.json --noEmit"
   },
   "devDependencies": {

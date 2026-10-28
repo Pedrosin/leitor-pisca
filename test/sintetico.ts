@@ -46,7 +46,8 @@ export function linhaDoTempo(codigos: readonly number[], tempos: TemposEcu = TEM
     }
     t += i < codigos.length - 1 ? tempos.pausaCodigoMs : tempos.pausaCicloMs;
   });
-  return { acesos, cicloMs: t };
+  // Sem código: luz apagada o tempo todo.
+  return { acesos, cicloMs: Math.max(t, 1) };
 }
 
 export function acesoEm(linha: LinhaDoTempo, t: number): boolean {
@@ -78,7 +79,11 @@ export interface Cena {
   lampada: { cx: number; cy: number; raioPx: number };
   ruido: number;
   tremorPx: number;
-  reflexo: boolean;
+  /**
+   * Mancha de reflexo perto da luz. true = passeia ao acaso (mão que mexe);
+   * 'periodico' = vai e volta em ciclo fixo (caso adversário: imita repetição).
+   */
+  reflexo: boolean | 'periodico';
   autoExposicao: boolean;
   luzesConstantes: boolean;
   jitterMs: number;
@@ -149,6 +154,10 @@ export function* gerarQuadros(parcial: Partial<Cena>): Generator<Quadro> {
   let passeioY = 0;
   let proximoBrilho = 1500 + rand() * 3000;
   let brilhoAte = -1;
+  let posRefX = 0;
+  let posRefY = 0;
+  let velRefX = 0;
+  let velRefY = 0;
 
   for (let k = 0; k < total; k++) {
     let t = k * periodo;
@@ -180,9 +189,19 @@ export function* gerarQuadros(parcial: Partial<Cena>): Generator<Quadro> {
     let refX = 0;
     let refY = 0;
     let brilhoGlobal = 0;
-    if (cena.reflexo) {
+    if (cena.reflexo === 'periodico') {
       refX = lx + r * 4 * Math.cos((2 * Math.PI * t) / 9000);
       refY = ly + r * 3 * Math.sin((2 * Math.PI * t) / 6000);
+    } else if (cena.reflexo) {
+      // Passeio aleatório suave, preso a uns 5 raios da luz.
+      velRefX = velRefX * 0.97 + gaussiano(rand) * 0.02 - (posRefX / (r * 5)) * 0.01;
+      velRefY = velRefY * 0.97 + gaussiano(rand) * 0.02 - (posRefY / (r * 4)) * 0.01;
+      posRefX += velRefX * r * 0.3;
+      posRefY += velRefY * r * 0.3;
+      refX = lx + posRefX;
+      refY = ly + r * 2.5 + posRefY;
+    }
+    if (cena.reflexo) {
       if (t >= proximoBrilho) {
         brilhoAte = t + periodo * (1 + Math.floor(rand() * 2)) - 1;
         proximoBrilho = t + 2000 + rand() * 3000;

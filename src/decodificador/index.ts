@@ -5,3 +5,4 @@ export { DetectorPisca, type Sugestao } from './detector';
 export type { EstadoLuz } from './limiar';
 export { Leitor, type EstadoLeitor } from './leitor';
 export { RefinadorRegiao } from './refinador';
+export { BuscadorLuz } from './buscador';

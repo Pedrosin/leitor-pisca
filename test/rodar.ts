@@ -1,29 +1,35 @@
-import { Decodificador, type EstadoLeitura } from '../src/decodificador';
-import { gerarQuadros, type Cena } from './sintetico';
+// Roda uma cena sintética pelo mesmo caminho do app: toque perto da luz → Leitor → estado.
+
+import { Leitor, type EstadoLeitor } from '../src/decodificador';
+import { CENA_PADRAO, gerarQuadros, type Cena } from './sintetico';
 
 export interface Resultado {
-  final: EstadoLeitura;
+  final: EstadoLeitor;
   /** Instante (ms) em que confirmou pela primeira vez. */
   confirmouEm: number | null;
   /** Todos os conjuntos que chegaram a ser confirmados, na ordem. */
-  historico: number[][];
+  confirmacoes: string[];
 }
 
-export function rodarCena(cena: Partial<Cena>, raioRegiao = 0.07): Resultado {
-  const dec = new Decodificador();
-  const w = cena.largura ?? 160;
-  const h = cena.altura ?? 120;
-  const regiao = { cx: cena.lampada?.cx ?? 0.5, cy: cena.lampada?.cy ?? 0.5, raio: raioRegiao };
-  let final = dec.estado();
+/** `toque` = deslocamento do dedo em relação ao centro da luz, em fração da largura. */
+export function rodarCena(cena: Partial<Cena>, toque = { dx: 0.02, dy: -0.015, raio: 0.07 }): Resultado {
+  const c = { ...CENA_PADRAO, ...cena };
+  const leitor = new Leitor(
+    { cx: c.lampada.cx + toque.dx, cy: c.lampada.cy + (toque.dy * c.largura) / c.altura, raio: toque.raio },
+    c.largura,
+    c.altura,
+  );
+  let final: EstadoLeitor | null = null;
   let confirmouEm: number | null = null;
-  const historico: number[][] = [];
-  for (const q of gerarQuadros(cena)) {
-    final = dec.processarQuadro(q.t, q.lum, w, h, regiao);
+  const confirmacoes: string[] = [];
+  for (const q of gerarQuadros(c)) {
+    final = leitor.processarQuadro(q.t, q.lum);
     if (final.confirmados) {
-      const ultimo = historico[historico.length - 1];
-      if (!ultimo || ultimo.join(',') !== final.confirmados.join(',')) historico.push(final.confirmados);
-      if (confirmouEm === null) confirmouEm = q.t;
+      const chave = final.confirmados.join(',');
+      if (confirmacoes.at(-1) !== chave) confirmacoes.push(chave);
+      confirmouEm ??= q.t;
     }
   }
-  return { final, confirmouEm, historico };
+  if (!final) throw new Error('cena sem quadros');
+  return { final, confirmouEm, confirmacoes };
 }
