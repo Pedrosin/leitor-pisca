@@ -303,3 +303,9 @@ Descartado: manter "Leitor de Pisca", que fica em português para quem instala e
 **D42. Prova de que nada ficou fixo.**
 - **Estática:** `test/varredura-textos.test.ts` lê a AST do TypeScript de `src/app`, `src/codigos` e `src/i18n/index.ts`. Ela acusa literal com cara de texto (letra acentuada, duas palavras ou palavra com maiúscula inicial) fora de contexto técnico (atributo, classe, testid, tag, comparação de estado). Exceções, cada uma com motivo: os três endônimos, a tecla "Enter" e o erro "NotAllowedError". Um controle prova que ela pega texto fixo, e injetar um texto fixo no código faz o teste falhar (conferido).
 - **No navegador:** o E2E roda as 6 telas em es, en e pt-BR. Em en e es, ele varre o texto visível, `aria-label`, placeholder e título em busca de texto de outro idioma: em en, letra fora do ASCII; em es, marcas do português. Pula o que declara `lang` próprio (o seletor).
+
+**D43. Com a pergunta da busca aberta, o rodapé é só a pergunta.**
+- "Marcar de novo" já saía (D25). Agora "Encerrar e conferir" também sai, e volta assim que a pessoa responde.
+- Motivo: nesse estado ainda não há luz confirmada, então "Encerrar" só mostraria "Nada lido ainda".
+- Medido: em 320×568 com texto em 200%, nos três idiomas, rodapé com a pergunta + "Encerrar" ficava mais alto que a tela (a base do "Encerrar" em 655–704 de 568).
+- O E2E confere que "Encerrar" some com a pergunta e volta inteiro na tela depois do "Sim".

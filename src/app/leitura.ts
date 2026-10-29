@@ -136,6 +136,7 @@ export function telaLeitura(nav: Navegar): TelaLeitura {
     pergunta.hidden = true;
     pergunta.replaceChildren();
     botaoMarcar.hidden = false;
+    botaoEncerrar.hidden = false;
   }
 
   function perguntarLuz(b: BuscadorLuz): void {
@@ -163,8 +164,11 @@ export function telaLeitura(nav: Navegar): TelaLeitura {
     nao.setAttribute('data-testid', 'recusar-luz-achada');
     pergunta.replaceChildren(h('p', {}, h('strong', {}, tx.pergunta.forte), ' ', tx.pergunta.texto), h('div', { class: 'duas' }, nao, sim));
     pergunta.hidden = false;
-    // Com a pergunta aberta, "Não, é outra" faz o papel de marcar de novo; sobra espaço no rodapé.
+    // Com a pergunta aberta, o rodapé é só a pergunta: "Não, é outra" faz o papel de marcar de novo, e
+    // "Encerrar" ainda não tem o que mostrar (nenhuma luz confirmada; daria "Nada lido"). Com os dois,
+    // em 320 px e texto em 200%, o rodapé ficava mais alto que a tela (D43).
     botaoMarcar.hidden = true;
+    botaoEncerrar.hidden = true;
     definirStatus(tx.pergunta.status, 'alerta');
   }
 

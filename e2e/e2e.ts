@@ -356,7 +356,9 @@ async function provaLayout(video: string, idioma: Idioma): Promise<boolean> {
         await page.waitForFunction(() => ((document.querySelector('[data-testid=camera]') as HTMLCanvasElement | null)?.width ?? 0) > 0);
         await passo('captura', ['camera', 'painel', 'encerrar', 'marcar-de-novo', 'zoom', 'sair', 'ajuda']);
         await page.getByTestId('usar-luz-achada').waitFor({ state: 'visible', timeout: 120000 });
-        await passo('pergunta', ['encerrar', 'usar-luz-achada', 'recusar-luz-achada']);
+        await passo('pergunta', ['usar-luz-achada', 'recusar-luz-achada']);
+        // Com a pergunta aberta o rodapé é só ela (D43); o "Encerrar" volta depois da resposta.
+        if (await page.getByTestId('encerrar').isVisible()) erros.push('pergunta: "Encerrar" visível junto da pergunta');
         await page.getByTestId('usar-luz-achada').click();
         await page.waitForTimeout(1500);
         await passo('lendo', ['camera', 'painel', 'encerrar', 'marcar-de-novo']);
