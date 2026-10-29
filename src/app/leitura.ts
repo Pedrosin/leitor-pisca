@@ -13,6 +13,7 @@ import {
   type TipoPisca,
 } from '../decodificador';
 import { buscarCodigo } from '../codigos/tabela';
+import { fmt, plural, t } from '../i18n';
 import { botao, cartaoCodigo, h, type Navegar } from './telas';
 
 /** Largura do quadro processado. 160 px basta para a lâmpada e cabe em qualquer celular a 60 fps. */
@@ -27,13 +28,11 @@ const JANELA_SAIR_MS = 4000;
 type QuadroVideo = (agora: number, meta: { mediaTime?: number }) => void;
 type VideoComQuadro = HTMLVideoElement & { requestVideoFrameCallback?: (cb: QuadroVideo) => number };
 
-const MENSAGEM_ALERTA: Record<string, string> = {
-  'sinal-fraco': 'Não vejo pisca no ponto marcado. Chegue mais perto ou toque de novo na luz.',
-  'luz-constante': 'A luz está acesa sem piscar: sem código gravado (ou o jumper não está no SCS).',
-  'sem-pisca': 'A luz parou de piscar. Confira o jumper e se a ignição está em ON.',
-};
+function mensagemAlerta(alerta: string): string {
+  const a = t().leitura.alertas;
+  return alerta === 'sinal-fraco' ? a.sinalFraco : alerta === 'luz-constante' ? a.luzConstante : a.semPisca;
+}
 
-const NOME_PISCA: Record<TipoPisca, string> = { longo: 'longa', curto: 'curta', aberto: 'acesa quando parou' };
 const SIMBOLO_PISCA: Record<TipoPisca, string> = { longo: '▬', curto: '•', aberto: '?' };
 
 /** Mapa de piscas desenhado igual ao da captura (▬ longa, • curta) e escrito por extenso. */
@@ -42,19 +41,17 @@ export function mapaPiscas(piscas: readonly TipoPisca[]): HTMLElement {
     'div',
     { class: 'mapa', 'data-testid': 'mapa-piscas' },
     h('span', { class: 'piscas', 'aria-hidden': 'true' }, piscas.map((p) => SIMBOLO_PISCA[p]).join('')),
-    h('span', { class: 'mapa-texto' }, piscas.map((p) => NOME_PISCA[p]).join(' - ')),
+    h('span', { class: 'mapa-texto' }, piscas.map((p) => t().piscas[p]).join(' - ')),
   );
 }
 
 function textoSituacao(c: CodigoConferido): string {
-  if (c.situacao === 'confirmado') return `Confirmado: lido igual ${c.vezes} vezes.`;
-  if (c.situacao === 'visto') {
-    const vezes = c.vezes === 1 ? '1 vez' : `${c.vezes} vezes, sem repetir no ritmo da lista`;
-    return `Visto ${vezes}. Confira contando os piscas no painel.`;
-  }
-  if (c.motivo === 'em-andamento') return 'Incompleto: a leitura parou no meio deste código.';
-  if (c.motivo === 'cortado') return 'Incompleto: a leitura começou no meio deste código.';
-  return 'Incompleto: piscas fora do padrão (reflexo ou mão mexendo).';
+  const s = t().conferencia.situacao;
+  if (c.situacao === 'confirmado') return plural(s.confirmado, c.vezes);
+  if (c.situacao === 'visto') return plural(s.visto, c.vezes);
+  if (c.motivo === 'em-andamento') return s.andamento;
+  if (c.motivo === 'cortado') return s.cortado;
+  return s.confuso;
 }
 
 /**
@@ -88,12 +85,13 @@ export interface TelaLeitura {
 export function telaLeitura(nav: Navegar): TelaLeitura {
   const video = h('video', { playsinline: '', muted: '', autoplay: '' }) as VideoComQuadro;
   video.muted = true;
-  const tela = h('canvas', { 'data-testid': 'camera', 'aria-label': 'Imagem da câmera. Toque na luz da injeção.' }) as HTMLCanvasElement;
-  const status = h('p', { class: 'status', 'data-testid': 'status', 'aria-live': 'polite' }, 'Abrindo a câmera…');
+  const tx = t().leitura;
+  const tela = h('canvas', { 'data-testid': 'camera', 'aria-label': tx.cameraRotulo }) as HTMLCanvasElement;
+  const status = h('p', { class: 'status', 'data-testid': 'status', 'aria-live': 'polite' }, tx.abrindo);
   const piscas = h('div', { class: 'piscas', 'data-testid': 'piscas', 'aria-hidden': 'true' });
   const lidos = h('p', { class: 'lidos', 'data-testid': 'lidos' });
   const resultado = h('div', { class: 'confirmados', 'data-testid': 'resultado' });
-  const dica = h('p', { class: 'dica-camera', 'aria-hidden': 'true' }, 'Toque na luz da injeção');
+  const dica = h('p', { class: 'dica-camera', 'aria-hidden': 'true' }, tx.dica);
   const captura = h('div', { class: 'captura', 'data-testid': 'captura' });
   const conferencia = h('div', { class: 'conferencia', 'data-testid': 'conferencia', hidden: '' });
   /** Encerrou para conferir: os quadros param de entrar na leitura (a câmera segue aberta para voltar). */
@@ -141,7 +139,7 @@ export function telaLeitura(nav: Navegar): TelaLeitura {
   }
 
   function perguntarLuz(b: BuscadorLuz): void {
-    const sim = botao('Sim, é essa', () => {
+    const sim = botao(tx.pergunta.sim, () => {
       const achada = b.sugestao;
       esconderPergunta();
       if (!achada || processo.width === 0) return;
@@ -154,20 +152,20 @@ export function telaLeitura(nav: Navegar): TelaLeitura {
       confirmadosBusca = b.confirmados;
       buscador = null;
       estado = null;
-      definirStatus('Luz confirmada. Lendo…');
+      definirStatus(tx.pergunta.aceita);
     }, 'primario');
     sim.setAttribute('data-testid', 'usar-luz-achada');
-    const nao = botao('Não, é outra', () => {
+    const nao = botao(tx.pergunta.nao, () => {
       b.recusar();
       esconderPergunta();
-      definirStatus('Toque na luz da injeção, ou espere eu procurar de novo.');
+      definirStatus(tx.pergunta.recusada);
     });
     nao.setAttribute('data-testid', 'recusar-luz-achada');
-    pergunta.replaceChildren(h('p', {}, h('strong', {}, 'Achei uma luz piscando no círculo tracejado.'), ' É a luz da injeção?'), h('div', { class: 'duas' }, nao, sim));
+    pergunta.replaceChildren(h('p', {}, h('strong', {}, tx.pergunta.forte), ' ', tx.pergunta.texto), h('div', { class: 'duas' }, nao, sim));
     pergunta.hidden = false;
     // Com a pergunta aberta, "Não, é outra" faz o papel de marcar de novo; sobra espaço no rodapé.
     botaoMarcar.hidden = true;
-    definirStatus('Confirme a luz achada, ou toque na luz certa.', 'alerta');
+    definirStatus(tx.pergunta.status, 'alerta');
   }
 
   function limparLeitura(): void {
@@ -188,7 +186,7 @@ export function telaLeitura(nav: Navegar): TelaLeitura {
 
   function reiniciar(): void {
     limparLeitura();
-    definirStatus('Toque na luz da injeção na imagem.');
+    definirStatus(tx.toque);
   }
 
   tela.addEventListener('pointerdown', (ev) => {
@@ -209,19 +207,19 @@ export function telaLeitura(nav: Navegar): TelaLeitura {
     estado = null;
     ultimosConfirmados = '';
     resultado.replaceChildren();
-    definirStatus('Lendo… segure firme. Leva de 30 s a 1 min e meio.');
+    definirStatus(tx.lendo);
   });
 
   const botaoZoom = botao('1×', () => {
     zoom = ZOOMS[(ZOOMS.indexOf(zoom) + 1) % ZOOMS.length] as (typeof ZOOMS)[number];
     botaoZoom.textContent = `${zoom}×`;
-    botaoZoom.setAttribute('aria-label', `Zoom ${zoom} vezes. Toque para trocar.`);
+    botaoZoom.setAttribute('aria-label', plural(tx.zoom.rotulo, zoom));
     // Zoom muda o enquadramento: o ponto marcado não vale mais.
     limparLeitura();
-    definirStatus(zoom === 1 ? 'Sem zoom. Toque na luz da injeção.' : `Zoom ${zoom}×. Toque na luz da injeção.`);
+    definirStatus(zoom === 1 ? tx.zoom.sem : fmt(tx.zoom.com, { n: zoom }));
   }, 'zoom');
   botaoZoom.setAttribute('data-testid', 'zoom');
-  botaoZoom.setAttribute('aria-label', 'Zoom 1 vez. Toque para trocar.');
+  botaoZoom.setAttribute('aria-label', plural(tx.zoom.rotulo, 1));
 
   /** Recorte do vídeo para o zoom digital: centro, 1/zoom do tamanho. */
   function recorte(): { sx: number; sy: number; sw: number; sh: number } {
@@ -252,19 +250,19 @@ export function telaLeitura(nav: Navegar): TelaLeitura {
     const confirmados = estado.confirmados ?? confirmadosBusca;
     if (performance.now() >= statusFixoAte) {
       if (confirmados) {
-        definirStatus('Leitura confirmada. Toque em Encerrar e conferir.');
+        definirStatus(tx.confirmada);
       } else if (alerta && leitor) {
-        definirStatus(MENSAGEM_ALERTA[alerta] ?? '', 'alerta');
+        definirStatus(mensagemAlerta(alerta), 'alerta');
       } else if (leitor) {
         definirStatus(
-          estado.regiaoRefinada ? 'Lendo… esperando a lista de códigos repetir.' : 'Lendo… segure firme. Leva de 30 s a 1 min e meio.',
+          estado.regiaoRefinada ? tx.lendoRefinado : tx.lendo,
         );
       }
     }
     const { longos, curtos } = estado.grupoAtual;
     piscas.textContent = SIMBOLO_PISCA.longo.repeat(longos) + SIMBOLO_PISCA.curto.repeat(curtos);
     const ultimos = estado.lidos.slice(-8).map((c) => (c === null ? '?' : String(c)));
-    lidos.textContent = ultimos.length ? `Lidos: ${ultimos.join(' · ')}` : '';
+    lidos.textContent = ultimos.length ? fmt(tx.lidos, { lista: ultimos.join(' · ') }) : '';
 
     const chave = confirmados?.join(',') ?? '';
     if (chave !== ultimosConfirmados) {
@@ -301,12 +299,12 @@ export function telaLeitura(nav: Navegar): TelaLeitura {
       if (tinhaQuadro && eraDeitado !== processo.width > processo.height) {
         // Girou o celular: a imagem da câmera girou junto e o ponto marcado aponta para outro lugar.
         limparLeitura();
-        definirStatus('Celular girou. Toque na luz da injeção de novo.', 'alerta', 3000);
+        definirStatus(tx.girou, 'alerta', 3000);
       } else {
         // A câmera pode trocar de resolução no começo: leitura e busca valem para um tamanho de quadro só.
         // A região é normalizada (0..1), então o toque continua valendo no tamanho novo.
         if (leitor) leitor = new Leitor(estado?.regiao ?? regiaoTocada ?? { cx: 0.5, cy: 0.5, raio: RAIO_TOQUE }, LARGURA_PROCESSO, altura);
-        else definirStatus('Toque na luz da injeção na imagem.');
+        else definirStatus(tx.toque);
         if (buscador) {
           // Pergunta aberta é do buscador antigo; o "sim" leria o ponto dele, não o desenhado.
           esconderPergunta();
@@ -373,8 +371,8 @@ export function telaLeitura(nav: Navegar): TelaLeitura {
       const nome = (erro as DOMException)?.name;
       definirStatus(
         nome === 'NotAllowedError'
-          ? 'Sem permissão para a câmera. Libere a câmera para este site nas configurações do navegador.'
-          : 'Não consegui abrir a câmera. Este navegador precisa de HTTPS para usar a câmera.',
+          ? tx.erros.semPermissao
+          : tx.erros.semCamera,
         'erro',
       );
       return;
@@ -389,11 +387,11 @@ export function telaLeitura(nav: Navegar): TelaLeitura {
     } catch {
       stream.getTracks().forEach((t) => t.stop());
       stream = null;
-      definirStatus('A câmera abriu, mas o vídeo não começou. Toque em Voltar e tente de novo.', 'erro');
+      definirStatus(tx.erros.videoParado, 'erro');
       return;
     }
     if (!ativo) return;
-    definirStatus('Toque na luz da injeção na imagem.');
+    definirStatus(tx.toque);
     laco();
     try {
       const trava = (await (navigator as Navigator & { wakeLock?: { request(t: 'screen'): Promise<{ release(): Promise<void> }> } }).wakeLock?.request('screen')) ?? null;
@@ -430,7 +428,8 @@ export function telaLeitura(nav: Navegar): TelaLeitura {
     pausado = true;
     const resumo = resumoAtual();
     const escolhidos = new Set<number>();
-    const confirmar = botao('Confirmar e ver os defeitos', () => mostrarDefeitos([...escolhidos].sort((a, b) => a - b)), 'primario');
+    const tc = t().conferencia;
+    const confirmar = botao(tc.confirmar, () => mostrarDefeitos([...escolhidos].sort((a, b) => a - b)), 'primario');
     confirmar.setAttribute('data-testid', 'confirmar-conferencia');
     const atualizar = () => {
       confirmar.disabled = escolhidos.size === 0;
@@ -458,18 +457,18 @@ export function telaLeitura(nav: Navegar): TelaLeitura {
         h('div', { class: 'numero' }, c.codigo === null ? '—' : String(c.codigo)),
         mapaPiscas(c.piscas),
         h('p', { class: 'situacao' }, textoSituacao(c)),
-        c.codigo !== null ? h('label', { class: 'usar' }, marcar, 'usar este código') : null,
+        c.codigo !== null ? h('label', { class: 'usar' }, marcar, tc.usar) : null,
       );
     });
     atualizar();
     conferencia.replaceChildren(
-      h('h2', {}, 'Confira o que foi lido'),
-      h('p', { class: 'sub' }, 'Compare com os piscas que você viu no painel: ▬ é longa (dezena), • é curta (unidade).'),
+      h('h2', {}, tc.titulo),
+      h('p', { class: 'sub' }, tc.instrucao),
       ...(linhas.length
         ? linhas
-        : [h('p', { 'data-testid': 'nada-lido' }, 'Nada lido ainda. Volte a ler e deixe a lista de códigos passar pelo menos uma vez.')]),
+        : [h('p', { 'data-testid': 'nada-lido' }, tc.nada)]),
       ...(resumo.descartadas > 0
-        ? [h('p', { class: 'sub' }, `${resumo.descartadas} leitura(s) descartada(s) no caminho (cortadas ou fora do padrão).`)]
+        ? [h('p', { class: 'sub', 'data-testid': 'descartadas' }, plural(tc.descartadas, resumo.descartadas))]
         : []),
       h('div', { class: 'acoes acoes-fixas' }, botaoVoltarALer(), confirmar),
     );
@@ -477,16 +476,16 @@ export function telaLeitura(nav: Navegar): TelaLeitura {
   }
 
   function botaoVoltarALer(): HTMLButtonElement {
-    const b = botao('Voltar a ler', voltarALer);
+    const b = botao(t().conferencia.voltarALer, voltarALer);
     b.setAttribute('data-testid', 'voltar-a-ler');
     return b;
   }
 
   function mostrarDefeitos(codigos: number[]): void {
-    const inicio = botao('Início', nav.inicio);
+    const inicio = botao(t().comum.inicio, nav.inicio);
     inicio.setAttribute('data-testid', 'ir-inicio');
     conferencia.replaceChildren(
-      h('h2', {}, 'Defeitos'),
+      h('h2', {}, t().conferencia.defeitos),
       ...codigos.map((c) => cartaoCodigo(buscarCodigo(c), 'codigo-defeito')),
       h('div', { class: 'acoes acoes-fixas' }, inicio, botaoVoltarALer()),
     );
@@ -519,7 +518,7 @@ export function telaLeitura(nav: Navegar): TelaLeitura {
     const agora = performance.now();
     if (lendo && agora - avisoSairEm > JANELA_SAIR_MS) {
       avisoSairEm = agora;
-      definirStatus('Leitura em andamento. Volte de novo para sair.', 'alerta', JANELA_SAIR_MS);
+      definirStatus(tx.sairAviso, 'alerta', JANELA_SAIR_MS);
       return true;
     }
     return false;
@@ -531,13 +530,13 @@ export function telaLeitura(nav: Navegar): TelaLeitura {
   const aoGirar = () => {
     if (!ativo || pausado || !leitor) return;
     limparLeitura();
-    definirStatus('Celular girou. Toque na luz da injeção de novo.', 'alerta', 3000);
+    definirStatus(tx.girou, 'alerta', 3000);
   };
   deitado.addEventListener('change', aoGirar);
 
-  const botaoEncerrar = botao('Encerrar e conferir', encerrar, 'primario');
+  const botaoEncerrar = botao(tx.encerrar, encerrar, 'primario');
   botaoEncerrar.setAttribute('data-testid', 'encerrar');
-  const botaoMarcar = botao('Marcar de novo', reiniciar);
+  const botaoMarcar = botao(tx.marcar, reiniciar);
   botaoMarcar.setAttribute('data-testid', 'marcar-de-novo');
 
   captura.append(
@@ -546,15 +545,15 @@ export function telaLeitura(nav: Navegar): TelaLeitura {
     h('div', { class: 'rodape' }, pergunta, h('div', { class: 'acoes' }, botaoMarcar, botaoEncerrar)),
   );
 
-  const sair = botao('Voltar', nav.voltar, 'voltar');
+  const sair = botao(t().comum.voltar, nav.voltar, 'voltar');
   sair.setAttribute('data-testid', 'sair');
-  const ajuda = botao('Ajuda', nav.preparar, 'voltar');
+  const ajuda = botao(t().comum.ajuda, nav.preparar, 'voltar');
   ajuda.setAttribute('data-testid', 'ajuda');
   const el = h(
     'section',
     { class: 'leitura modo-captura', 'data-tela': 'leitura' },
     // Título só para leitor de tela na captura: a tela fala por si e o espaço vai para a câmera.
-    h('div', { class: 'barra' }, sair, h('h1', { class: 'so-leitor-de-tela' }, 'Ler os códigos'), ajuda),
+    h('div', { class: 'barra' }, sair, h('h1', { class: 'so-leitor-de-tela' }, tx.titulo), ajuda),
     captura,
     conferencia,
   );

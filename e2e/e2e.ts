@@ -8,7 +8,10 @@ import { join, resolve } from 'node:path';
 import { chromium, type Page } from 'playwright-core';
 import { CINTO, gerarQuadros, linhaDoTempo, type Cena } from '../test/sintetico';
 import { gravarY4m } from '../test/y4m';
-import { checarLayout, pontoNaImagem } from './layout';
+import { checarLayout, checarIdioma, pontoNaImagem } from './layout';
+import { IDIOMAS, fmt, type Dicionario, type Idioma } from '../src/i18n';
+
+const dic = (id: Idioma): Dicionario => IDIOMAS[id].dicionario;
 
 const RAIZ = resolve(import.meta.dirname, '..');
 const SAIDA = join(RAIZ, 'e2e', '.saida');
@@ -32,6 +35,8 @@ interface Cenario {
   viewport?: { width: number; height: number };
   /** Zoom digital antes de tocar (o toque é na imagem já ampliada). */
   zoom?: 2 | 3;
+  /** Idioma do navegador (locale do Chrome). Padrão pt-BR. */
+  idioma?: Idioma;
 }
 
 /** Ponto de um quadro inteiro visto na imagem com zoom digital do centro. */
@@ -82,6 +87,22 @@ const CENARIOS: Cenario[] = [
     prazoMs: 120000,
     zoom: 2,
   },
+  {
+    // Leitura completa em inglês: navegador en-US, status e cartões no idioma.
+    nome: 'en-toque-12-41',
+    cena: { codigos: [12, 41], ruido: 6, tremorPx: 3, autoExposicao: true, luzesConstantes: true, reflexo: true, lampada: { cx: 0.62, cy: 0.45, raioPx: 5 } },
+    toque: { cx: 0.64, cy: 0.43 },
+    prazoMs: 150000,
+    idioma: 'en',
+  },
+  {
+    // Leitura completa em espanhol, pela busca automática (pergunta "¿Es la luz Check Engine?").
+    nome: 'es-busca-3',
+    cena: { codigos: [3], ruido: 6, tremorPx: 2, luzesConstantes: true, lampada: { cx: 0.35, cy: 0.55, raioPx: 5 } },
+    toque: null,
+    prazoMs: 150000,
+    idioma: 'es',
+  },
 ];
 
 function gerarVideo(c: Cenario): string {
@@ -129,11 +150,12 @@ async function rodar(c: Cenario, video: string): Promise<boolean> {
     args: ['--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream', `--use-file-for-fake-video-capture=${video}`],
   });
   try {
-    const page = await navegador.newPage({ viewport: c.viewport ?? { width: 390, height: 844 }, isMobile: true, hasTouch: true });
+    const idioma = c.idioma ?? 'pt-BR';
+    const page = await navegador.newPage({ viewport: c.viewport ?? { width: 390, height: 844 }, isMobile: true, hasTouch: true, locale: idioma });
     const erros: string[] = [];
     page.on('pageerror', (e) => erros.push(e.message));
     await page.goto(URL_APP);
-    await page.getByRole('button', { name: 'Ler os códigos' }).click();
+    await page.getByTestId('ir-ler').click();
     const camera = page.getByTestId('camera');
     await page.waitForFunction(() => {
       const el = document.querySelector('[data-testid=camera]') as HTMLCanvasElement | null;
@@ -170,10 +192,12 @@ async function rodar(c: Cenario, video: string): Promise<boolean> {
     }
     const segundos = ((Date.now() - inicio) / 1000).toFixed(1);
     const errados = [...vistos].filter((v) => v !== esperado.join(','));
-    const ok = ultimo.confirmados.join(',') === esperado.join(',') && errados.length === 0 && erros.length === 0;
+    // O status confirmado sai no idioma do navegador (texto exato do dicionário).
+    const statusNoIdioma = ultimo.status === dic(idioma).leitura.confirmada;
+    const ok = ultimo.confirmados.join(',') === esperado.join(',') && errados.length === 0 && erros.length === 0 && statusNoIdioma;
     console.log(`  ${ok ? 'PASSOU' : 'FALHOU'} ${c.nome} em ${segundos} s`);
     console.log(`    esperado: [${esperado.join(', ')}]  no DOM: [${ultimo.confirmados.join(', ')}]  confirmações erradas: ${errados.length ? errados.join(' | ') : 'nenhuma'}`);
-    console.log(`    status: "${ultimo.status}"`);
+    console.log(`    status (${idioma}): "${ultimo.status}" ${statusNoIdioma ? '= dicionário' : `≠ dicionário ("${dic(idioma).leitura.confirmada}")`}`);
     console.log(`    ${ultimo.lidos}`);
     const titulos = await page.locator('[data-testid=codigo-confirmado] .nome').allTextContents();
     console.log(`    confirmados: ${titulos.map((t, i) => `${ultimo.confirmados[i]} = ${t}`).join(' | ')}`);
@@ -199,7 +223,8 @@ async function encerrarConferirEVoltar(page: Page, esperado: string[]): Promise<
   await page.waitForFunction(
     (codigos) => {
       const t = document.querySelector('[data-testid=lidos]')?.textContent ?? '';
-      const lidos = t.replace('Lidos:', '').split('·').map((x) => x.trim());
+      // "Lidos: 12 · 41" em qualquer idioma: o que vem depois dos dois-pontos.
+      const lidos = t.slice(t.indexOf(':') + 1).split('·').map((x) => x.trim());
       return codigos.some((c) => lidos.includes(c));
     },
     esperado,
@@ -248,7 +273,7 @@ async function encerrarConferirEVoltar(page: Page, esperado: string[]): Promise<
   return erros.length === 0;
 }
 
-/** Telas da prova de layout: em pé (3 tamanhos e o menor 320), deitado, e texto do aparelho em 200%. */
+/** Telas da prova de layout: em pé (3 tamanhos e o menor 320), deitado, e texto do aparelho em 200% (360 e 320). */
 const TELAS: Array<{ nome: string; width: number; height: number; texto200?: boolean }> = [
   { nome: '360x640', width: 360, height: 640 },
   { nome: '390x844', width: 390, height: 844 },
@@ -256,6 +281,8 @@ const TELAS: Array<{ nome: string; width: number; height: number; texto200?: boo
   { nome: '844x390-deitado', width: 844, height: 390 },
   { nome: '320x568', width: 320, height: 568 },
   { nome: '360x640-texto200', width: 360, height: 640, texto200: true },
+  // A pior combinação: tela mais estreita com texto em 200% (pegou o "Voltar" vazando ao lado do título).
+  { nome: '320x568-texto200', width: 320, height: 568, texto200: true },
 ];
 
 /**
@@ -264,7 +291,8 @@ const TELAS: Array<{ nome: string; width: number; height: number; texto200?: boo
  * sem rolagem horizontal, alvos ≥ 48 px, contraste calculado, e a ação daquele estado dentro da tela.
  * Capturas em e2e/.saida/layout/ (fora do git) para a conferência visual do Victor; não contam como prova.
  */
-async function provaLayout(video: string): Promise<boolean> {
+async function provaLayout(video: string, idioma: Idioma): Promise<boolean> {
+  const tx = dic(idioma);
   const navegador = await chromium.launch({
     executablePath: CHROME,
     headless: true,
@@ -275,15 +303,24 @@ async function provaLayout(video: string): Promise<boolean> {
   let falhas = 0;
   try {
     for (const t of TELAS) {
-      const page = await navegador.newPage({ viewport: { width: t.width, height: t.height }, isMobile: true, hasTouch: true, deviceScaleFactor: 2 });
+      const page = await navegador.newPage({
+        viewport: { width: t.width, height: t.height },
+        isMobile: true,
+        hasTouch: true,
+        deviceScaleFactor: 2,
+        locale: idioma,
+      });
       const erros: string[] = [];
       const linhas: string[] = [];
       page.on('pageerror', (e) => erros.push(`erro na página: ${e.message}`));
       const passo = async (nome: string, naTela: string[] = []) => {
         const r = await checarLayout(page, { naTela });
-        linhas.push(`${nome}: ${r.erros.length ? 'FALHOU' : 'ok'} (${r.medidas})`);
+        // Nenhum texto de outro idioma na tela (sobra de texto fixo ou chave esquecida).
+        const misturado = await checarIdioma(page, idioma);
+        linhas.push(`${nome}: ${r.erros.length || misturado.length ? 'FALHOU' : 'ok'} (${r.medidas})`);
         for (const e of r.erros) erros.push(`${nome}: ${e}`);
-        await page.screenshot({ path: join(pasta, `${t.nome}-${nome}.png`) });
+        for (const e of misturado) erros.push(`${nome}: texto fora do idioma ${idioma}: ${e}`);
+        await page.screenshot({ path: join(pasta, `${idioma}-${t.nome}-${nome}.png`) });
       };
       try {
         await page.goto(URL_APP);
@@ -291,7 +328,7 @@ async function provaLayout(video: string): Promise<boolean> {
         await passo('inicio');
 
         // Tabela: digitar o número leva ao cartão, logo abaixo do campo fixo.
-        await page.getByRole('button', { name: 'Tabela de códigos' }).click();
+        await page.getByTestId('ir-tabela').click();
         await passo('tabela', ['ir-codigo']);
         await page.getByTestId('ir-codigo').fill('41');
         await page.waitForFunction(() => {
@@ -304,17 +341,18 @@ async function provaLayout(video: string): Promise<boolean> {
         await page.getByTestId('ir-codigo').fill('99');
         await page.getByTestId('ir-codigo-botao').click();
         const aviso = (await page.getByTestId('ir-codigo-aviso').textContent()) ?? '';
-        if (!aviso.includes('99 não está na tabela')) erros.push(`tabela: aviso de código fora = "${aviso}"`);
+        const avisoEsperado = fmt(tx.tabela.fora, { n: 99, conferir: tx.desconhecido.conferir });
+        if (aviso !== avisoEsperado) erros.push(`tabela: aviso de código fora = "${aviso}"`);
         // Voltar do sistema (gesto do Android) sai da tabela para o início.
         await page.goBack();
         if (!(await page.locator('[data-tela=inicio]').count())) erros.push('voltar do sistema na tabela não foi ao início');
 
-        await page.getByRole('button', { name: 'Como preparar o carro' }).click();
+        await page.getByTestId('ir-preparar').click();
         await passo('preparar');
         await page.goBack();
 
         // Captura.
-        await page.getByRole('button', { name: 'Ler os códigos' }).click();
+        await page.getByTestId('ir-ler').click();
         await page.waitForFunction(() => ((document.querySelector('[data-testid=camera]') as HTMLCanvasElement | null)?.width ?? 0) > 0);
         await passo('captura', ['camera', 'painel', 'encerrar', 'marcar-de-novo', 'zoom', 'sair', 'ajuda']);
         await page.getByTestId('usar-luz-achada').waitFor({ state: 'visible', timeout: 120000 });
@@ -328,19 +366,19 @@ async function provaLayout(video: string): Promise<boolean> {
           await page.setViewportSize({ width: 844, height: 390 });
           await page.waitForTimeout(400);
           const girou = (await page.getByTestId('status').textContent()) ?? '';
-          if (!girou.includes('Celular girou')) erros.push(`girar no meio da leitura: status "${girou}"`);
+          if (girou !== tx.leitura.girou) erros.push(`girar no meio da leitura: status "${girou}"`);
           await page.setViewportSize({ width: t.width, height: t.height });
           await page.waitForTimeout(400);
           const ponto = await pontoNaImagem(page, 0.5, 0.5);
           await page.mouse.click(ponto.x, ponto.y);
-          linhas.push(`girar no meio da leitura: ${girou.includes('Celular girou') ? 'recomeçou e avisou' : 'FALHOU'}`);
+          linhas.push(`girar no meio da leitura: ${girou === tx.leitura.girou ? 'recomeçou e avisou' : 'FALHOU'}`);
         }
 
         // Voltar do sistema no meio da leitura: o primeiro avisa e fica; o segundo sai.
         await page.goBack();
         await page.waitForTimeout(300);
         const aviso1 = (await page.getByTestId('status').textContent()) ?? '';
-        if (!(await page.locator('[data-tela=leitura]').count()) || !aviso1.includes('Volte de novo')) {
+        if (!(await page.locator('[data-tela=leitura]').count()) || aviso1 !== tx.leitura.sairAviso) {
           erros.push(`1º voltar no meio da leitura: tela ${await page.locator('[data-tela]').getAttribute('data-tela')}, status "${aviso1}"`);
         }
 
@@ -362,7 +400,7 @@ async function provaLayout(video: string): Promise<boolean> {
       } catch (e) {
         erros.push(`exceção: ${(e as Error).message.split('\n')[0]}`);
       }
-      console.log(`  ${erros.length ? 'FALHOU' : 'PASSOU'} layout ${t.nome}`);
+      console.log(`  ${erros.length ? 'FALHOU' : 'PASSOU'} layout ${idioma} ${t.nome}`);
       for (const l of linhas) console.log(`    ${l}`);
       for (const e of erros) console.log(`    ERRO: ${e}`);
       if (erros.length) falhas++;
@@ -373,6 +411,69 @@ async function provaLayout(video: string): Promise<boolean> {
   }
   return falhas === 0;
 }
+
+/**
+ * Idioma pelo navegador e pela escolha manual, sem câmera: locale do Chrome en/es/pt-BR/fr → app em
+ * en/es/pt-BR/en (resto do mundo em inglês), com <html lang> e título da aba; o seletor da tela inicial
+ * troca o idioma e a escolha sobrevive ao reload (vale sobre o navegador).
+ */
+async function provaIdioma(): Promise<boolean> {
+  const navegador = await chromium.launch({ executablePath: CHROME, headless: true });
+  const erros: string[] = [];
+  const linhas: string[] = [];
+  try {
+    for (const [locale, esperado] of [
+      ['en-US', 'en'],
+      ['es-MX', 'es'],
+      ['pt-BR', 'pt-BR'],
+      ['fr-FR', 'en'],
+    ] as const) {
+      const ctx = await navegador.newContext({ locale, viewport: { width: 390, height: 844 }, isMobile: true });
+      const page = await ctx.newPage();
+      await page.goto(URL_APP);
+      const r = await page.evaluate(() => ({
+        lang: document.documentElement.lang,
+        titulo: document.title,
+        ler: document.querySelector('[data-testid=ir-ler]')?.textContent ?? '',
+        navegador: navigator.language,
+      }));
+      const tx = dic(esperado);
+      const ok = r.lang === esperado && r.titulo === tx.app.titulo && r.ler === tx.inicio.ler;
+      linhas.push(`navegador ${r.navegador} → app ${r.lang} ("${r.ler}", título "${r.titulo}") ${ok ? 'ok' : 'FALHOU'}`);
+      if (!ok) erros.push(`locale ${locale}: esperado ${esperado}, veio ${JSON.stringify(r)}`);
+      await ctx.close();
+    }
+    // Seletor: navegador em inglês, escolhe espanhol; a escolha vale no reload e sobre o navegador.
+    const ctx = await navegador.newContext({ locale: 'en-US', viewport: { width: 360, height: 640 }, isMobile: true, hasTouch: true });
+    const page = await ctx.newPage();
+    await page.goto(URL_APP);
+    const alvo = await page.getByTestId('idioma-es').boundingBox();
+    if (!alvo || alvo.height < 47.5 || alvo.width < 47.5) erros.push(`seletor: alvo ${alvo?.width}×${alvo?.height}`);
+    await page.getByTestId('idioma-es').click();
+    const depois = await page.evaluate(() => [document.documentElement.lang, document.querySelector('[data-testid=ir-ler]')?.textContent]);
+    await page.reload();
+    const noReload = await page.evaluate(() => [
+      document.documentElement.lang,
+      document.querySelector('[data-testid=ir-ler]')?.textContent,
+      document.querySelector('[data-testid=idioma-es]')?.getAttribute('aria-pressed'),
+    ]);
+    const okSeletor = depois[0] === 'es' && depois[1] === dic('es').inicio.ler;
+    const okReload = noReload[0] === 'es' && noReload[1] === dic('es').inicio.ler && noReload[2] === 'true';
+    linhas.push(`seletor en → es: ${okSeletor ? 'ok' : 'FALHOU'} ("${depois[1]}"); depois do reload: ${okReload ? 'ok' : 'FALHOU'} ("${noReload[1]}")`);
+    if (!okSeletor) erros.push(`seletor: ${JSON.stringify(depois)}`);
+    if (!okReload) erros.push(`reload: ${JSON.stringify(noReload)}`);
+    await ctx.close();
+  } finally {
+    await navegador.close();
+  }
+  console.log(`  ${erros.length ? 'FALHOU' : 'PASSOU'} idioma pelo navegador e pelo seletor`);
+  for (const l of linhas) console.log(`    ${l}`);
+  for (const e of erros) console.log(`    ERRO: ${e}`);
+  return erros.length === 0;
+}
+
+/** Idiomas da prova de layout: espanhol (textos mais longos) primeiro. */
+const IDIOMAS_LAYOUT: Idioma[] = ['es', 'en', 'pt-BR'];
 
 async function main(): Promise<void> {
   if (!CHROME) throw new Error('Chrome não encontrado; defina CHROME=<caminho>');
@@ -387,15 +488,25 @@ async function main(): Promise<void> {
   try {
     await esperarServidor();
     console.log(`App em ${URL_APP}; Chrome: ${CHROME}`);
-    console.log('Prova de layout por tela (câmera falsa da busca automática):');
-    if (!(await provaLayout(videos[1] as string))) falhas++;
-    // E2E_SO_LAYOUT=1 pula os cenários de leitura (iteração rápida de CSS); a entrega roda tudo.
-    if (!process.env.E2E_SO_LAYOUT) for (const [i, c] of CENARIOS.entries()) if (!(await rodar(c, videos[i] as string))) falhas++;
+    console.log('Idioma:');
+    if (!(await provaIdioma())) falhas++;
+    // E2E_SO=idioma|layout roda só uma parte (iteração rápida); a entrega roda tudo.
+    const so = process.env.E2E_SO;
+    if (so !== 'idioma') {
+      console.log('Prova de layout por tela e idioma (câmera falsa da busca automática):');
+      for (const id of IDIOMAS_LAYOUT) if (!(await provaLayout(videos[1] as string, id))) falhas++;
+    }
+    if (!so) for (const [i, c] of CENARIOS.entries()) if (!(await rodar(c, videos[i] as string))) falhas++;
   } finally {
     servidor.kill();
   }
-  const total = CENARIOS.length + 1;
-  console.log(falhas ? `E2E: ${falhas} de ${total} falharam` : `E2E: ${total} de ${total} passaram (leitura: ${CENARIOS.length} cenários; layout: ${TELAS.length} telas)`);
+  const so = process.env.E2E_SO;
+  const total = 1 + (so === 'idioma' ? 0 : IDIOMAS_LAYOUT.length) + (so ? 0 : CENARIOS.length);
+  console.log(
+    falhas
+      ? `E2E: ${falhas} de ${total} falharam`
+      : `E2E: ${total} de ${total} passaram (idioma: 1; layout: ${TELAS.length} telas × ${so === 'idioma' ? 0 : IDIOMAS_LAYOUT.length} idiomas; leitura: ${so ? 0 : CENARIOS.length} cenários)`,
+  );
   process.exit(falhas ? 1 : 0);
 }
 

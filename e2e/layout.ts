@@ -202,3 +202,36 @@ export async function pontoNaImagem(page: Page, cx: number, cy: number): Promise
     [cx, cy],
   );
 }
+
+/**
+ * Texto fora do idioma da tela: varre o texto visível e os rótulos (aria-label, placeholder, title),
+ * pulando o que declara outro idioma em `lang` (o seletor mostra cada idioma no próprio idioma).
+ * en: nenhuma letra fora do ASCII. es: nenhuma marca do português (ã, õ, ç, "não", "você", "é" sozinho).
+ */
+export async function checarIdioma(page: Page, idioma: string): Promise<string[]> {
+  if (idioma === 'pt-BR') return [];
+  return page.evaluate((id) => {
+    const proibido = id === 'en' ? /(?![A-Za-z])\p{L}/u : /[ãõç]|\bnão\b|\bvocê\b|(^|\s)é(\s|$)/iu;
+    const achados: string[] = [];
+    const doIdioma = (e: Element | null) => {
+      const comLang = e?.closest('[lang]');
+      return !comLang || comLang === document.documentElement || comLang.getAttribute('lang') === id;
+    };
+    const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+    for (let n = walker.nextNode(); n; n = walker.nextNode()) {
+      const texto = n.textContent ?? '';
+      const pai = n.parentElement;
+      if (!texto.trim() || !pai || !doIdioma(pai) || pai.closest('[hidden]')) continue;
+      if (proibido.test(texto)) achados.push(`"${texto.trim().slice(0, 60)}"`);
+    }
+    for (const e of document.querySelectorAll('[aria-label], [placeholder], [title]')) {
+      if (!doIdioma(e)) continue;
+      for (const a of ['aria-label', 'placeholder', 'title']) {
+        const v = e.getAttribute(a);
+        if (v && proibido.test(v)) achados.push(`${a}="${v.slice(0, 60)}"`);
+      }
+    }
+    if (proibido.test(document.title)) achados.push(`título "${document.title}"`);
+    return achados;
+  }, idioma);
+}

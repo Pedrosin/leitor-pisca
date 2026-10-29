@@ -1,8 +1,22 @@
 {
-  "name": "Leitor de Pisca",
-  "short_name": "Leitor Pisca",
-  "description": "Lê pela câmera o código que a luz da injeção pisca nos Honda OBD1 (92–95).",
-  "lang": "pt-BR",
+  "name": "OBD1 Blink",
+  "short_name": "OBD1 Blink",
+  "name_localized": {
+    "pt-BR": "Leitor de Pisca OBD1",
+    "en": "OBD1 Blink Code Reader",
+    "es": "Lector de Parpadeo OBD1"
+  },
+  "short_name_localized": {
+    "pt-BR": "Leitor Pisca",
+    "en": "OBD1 Blink",
+    "es": "Lector OBD1"
+  },
+  "description": "Reads the Check Engine light blink codes of 1992–1995 OBD1 Hondas through the camera.",
+  "description_localized": {
+    "pt-BR": "Lê pela câmera o código que a luz da injeção pisca nos Honda OBD1 (92–95).",
+    "en": "Reads the Check Engine light blink codes of 1992–1995 OBD1 Hondas through the camera.",
+    "es": "Lee con la cámara el código que parpadea la luz Check Engine en los Honda OBD1 (92–95)."
+  },
   "start_url": "./",
   "scope": "./",
   "display": "standalone",

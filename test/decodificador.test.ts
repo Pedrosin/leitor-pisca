@@ -6,7 +6,7 @@ import { FiltroBordas, classificarGrupo, fronteiraAprendida } from '../src/decod
 import { cicloRepetido } from '../src/decodificador/ciclos';
 import { Decodificador, CONFIG_PADRAO } from '../src/decodificador';
 import { linhaDoTempo, acesoEm, TEMPOS_ECU, aleatorio, type TemposEcu } from './sintetico';
-import { CODIGOS } from '../src/codigos/tabela';
+import { NUMEROS } from '../src/codigos/tabela';
 
 /** Alimenta o decodificador com o sinal ideal da ECU amostrado a `fps`, e devolve o estado final. */
 function decodificarSinal(
@@ -130,7 +130,7 @@ describe('confirmação por ciclo', () => {
 });
 
 describe('decodificador com sinal ideal', () => {
-  test.each(CODIGOS.map((c) => c.codigo).filter((c) => c > 0))('código %i', (codigo) => {
+  test.each(NUMEROS.filter((c) => c > 0))('código %i', (codigo) => {
     const r = decodificarSinal([codigo]);
     expect(r.estado.confirmados).toEqual([codigo]);
     expect([...r.confirmacoes]).toEqual([String(codigo)]);

@@ -248,3 +248,58 @@ Fora desta rodada, e por quê:
 - "Ir para o código" deixava o teclado aberto sobre o cartão. Agora fecha ao completar o número.
 - "Coberto por" olhava só o centro do elemento; agora olha centro e quatro cantos.
 - O contraste calculado só considera cor de fundo sólida (gradiente e imagem ficam de fora). Isso está escrito no `layout.ts`; o único gradiente do app fica atrás de botões de fundo sólido.
+
+## Vários idiomas (2026-10-29)
+
+Pedido: atender vários países. Escopo da rodada (decidido pela sessão coordenadora): pt-BR (base), en e es. Juntos cobrem o Brasil, os EUA, o Canadá, o Reino Unido, a Austrália, a Nova Zelândia, a América Latina e a Espanha.
+
+**D35. Um dicionário por idioma, tipado a partir do pt-BR.**
+- Estrutura: `src/i18n/<idioma>.ts`, com o tipo `Dicionario` derivado de `typeof ptBR` (folhas viram `string`). Chave faltando ou sobrando em qualquer idioma quebra o typecheck; testado de propósito: TS2741 para a faltando, TS2353 para a sobrando.
+- Marcadores `{nome}` via `fmt()`. O `test/i18n.test.ts` exige os mesmos marcadores em todos os idiomas.
+- Plural via `Intl.PluralRules` do idioma atual. O texto plural aceita qualquer categoria CLDR (zero/one/two/few/many/other), então um idioma com mais formas não esbarra no tipo do pt-BR.
+- Idioma novo = 1 arquivo de dicionário + 1 linha no registro `IDIOMAS`. As telas não mudam e a detecção pega o código base sozinha.
+Descartado:
+- i18next/FormatJS: peso, e chave como string solta, sem tipo;
+- descobrir o arquivo do idioma sozinho (`import.meta.glob`): economiza a linha do registro, mas perde o tipo `Idioma` como união literal.
+
+**D36. Idioma do acesso.**
+- A escolha manual salva em `localStorage` (com try/catch: aba privada e bloqueio caem na detecção) vale sobre tudo.
+- Sem escolha salva, vale a primeira preferência de `navigator.languages` que o app tem: pt-* → pt-BR, es-* → es, en-* → en. O resto do mundo cai em en.
+- pt-PT recebe pt-BR (diferença menor que ler em inglês).
+- Na ordem ["fr-FR", "es-AR"], vale o es.
+- `<html lang>`, `document.title` e a meta description seguem o idioma.
+
+**D37. O seletor fica só na tela inicial.**
+- Três botões com o nome de cada idioma no próprio idioma ("Português", "English", "Español"), com `lang` e `aria-pressed`. Quem caiu no idioma errado acha o seu.
+- Alvo ≥ 48 px, provado no E2E.
+Motivo para não pôr na leitura:
+- o idioma se escolhe antes de ler;
+- a barra da captura não tem espaço (D25);
+- redesenhar a captura no meio da leitura mexeria em pergunta, conferência e rodapé montados com o texto antigo, o que é risco sem caso de uso.
+Na leitura, trocar de idioma pede voltar ao início, e isso encerra a leitura do mesmo jeito que o "Voltar".
+
+**D38. Terminologia de cada mercado, não tradução literal.**
+- **en:** "Check Engine light" (o dono americano diz "check engine light"; o manual Honda dos EUA diz "Malfunction Indicator Lamp (MIL)"; no Reino Unido aparece "PGM-FI warning lamp"). O passo "Watch the Check Engine light" cita "(CHECK ENGINE / PGM-FI; Honda manuals call it the MIL)". Também "service check connector (SCS)", "data link connector (DLC)", "jumper", "kick panel".
+- **es:** "luz Check Engine" (como aparece em fonte latino-americana); para a Espanha, "testigo de avería" (Honda Espanha, em manual de moto). Também "conector de verificación de servicio (SCS)" (não achamos o termo Honda em espanhol), "puente", "bolsa de aire (airbag, SRS)" e "auto". Registro "usted".
+- **Fusível:** o rótulo como vem impresso, sem tradução. "BACK UP 7.5 A", confirmado nos EUA, e "(em alguns carros o rótulo é BACK UP (RADIO))", fonte única de exportação.
+- **Aviso do airbag:** mesmo conteúdo nos três idiomas: não mexer nos conectores amarelos, fios e conectores amarelos são do airbag (SRS), mexer pode disparar ou deixar com defeito. A Honda confirma, em inglês, o chicote amarelo do SRS ("SRS wiring can be identified by special yellow outer covering"). O teste exige AMARELOS/YELLOW/AMARILLOS e SRS.
+
+**D39. Lado do passageiro sem lado fixo.**
+- O texto antigo dizia "lado do passageiro (lado direito)", o que está errado em país de volante à direita.
+- Agora: "direito em carro com volante à esquerda" (confirmado em ≥ 2 fontes, EUA). Em carro com volante à direita (Reino Unido, Japão, Austrália), "deve ser o esquerdo", porque um manual Honda de exportação (Europa/Austrália) também diz "lado do passageiro" e um dono do Reino Unido achou a ECU no assoalho do passageiro. Mas o texto diz que isso NÃO foi conferido em duas fontes.
+- Não conferido, e escrito assim na tela "preparar" dos três idiomas: o lado do SCS e o rótulo do fusível em volante à direita, no Japão e na América Latina; a cor do SCS em 92–93; quais versões têm airbag em cada mercado.
+
+**D40. Nome do app instalado neutro: "OBD1 Blink".**
+- O `name` do manifest é um só e é o que o Android e o iPhone usam. `name_localized`/`description_localized` entraram também, mas hoje só funcionam no Chrome/Edge desktop 148+: não no Chrome Android nem no Safari iOS (MDN BCD e Chrome Platform Status), e navegador sem suporte ignora.
+- O membro `translations` nunca foi lançado (era o issue W3C #676).
+- No navegador, o título da aba segue o idioma (Leitor de Pisca / Blink Code Reader / Lector de Códigos de Parpadeo). O "Adicionar à Tela de Início" do iPhone sugere esse título.
+Descartado: manter "Leitor de Pisca", que fica em português para quem instala em inglês ou espanhol.
+
+**D41. A tabela guarda estrutura; os textos vão para o dicionário.**
+- `src/codigos/tabela.ts` tem número, situação e fontes de cada código, e a URL de cada fonte.
+- Nome, causa, o que conferir, onde existe, observação e o título de cada fonte ficam no dicionário, com chave = número do código.
+- O tipo obriga os 33 códigos em cada idioma e a mesma presença de "onde existe" e "observação" por código. O teste confere que nenhum texto está vazio.
+
+**D42. Prova de que nada ficou fixo.**
+- **Estática:** `test/varredura-textos.test.ts` lê a AST do TypeScript de `src/app`, `src/codigos` e `src/i18n/index.ts`. Ela acusa literal com cara de texto (letra acentuada, duas palavras ou palavra com maiúscula inicial) fora de contexto técnico (atributo, classe, testid, tag, comparação de estado). Exceções, cada uma com motivo: os três endônimos, a tecla "Enter" e o erro "NotAllowedError". Um controle prova que ela pega texto fixo, e injetar um texto fixo no código faz o teste falhar (conferido).
+- **No navegador:** o E2E roda as 6 telas em es, en e pt-BR. Em en e es, ele varre o texto visível, `aria-label`, placeholder e título em busca de texto de outro idioma: em en, letra fora do ASCII; em es, marcas do português. Pula o que declara `lang` próprio (o seletor).
