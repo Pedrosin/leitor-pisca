@@ -209,17 +209,19 @@ ol.passos li {
 }
 
 .captura {
-  flex: 1 0 auto;
+  /* Altura fixa (o que sobra da barra): status e códigos longos rolam dentro do painel em vez de
+     esticar a grade e empurrar a câmera para fora da tela (visto deitado, com o resultado na tela). */
+  flex: 1 1 0;
   min-height: 0;
   display: grid;
-  grid-template-rows: minmax(120px, 1fr) auto auto;
+  grid-template-rows: minmax(96px, 1fr) minmax(0, auto) auto;
   gap: 8px;
   margin-top: 8px;
 }
 
 .camera {
   position: relative;
-  min-height: 120px;
+  min-height: 96px;
   border-radius: var(--raio);
   overflow: hidden;
   background: #000;

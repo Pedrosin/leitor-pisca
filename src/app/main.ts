@@ -81,8 +81,15 @@ window.addEventListener('popstate', (ev) => {
   mostrar(destino.tela);
 });
 
-history.replaceState(estadoAtual, '');
-mostrar('inicio');
+// Reload: o navegador devolve o estado da entrada atual; reaproveita (sobrescrever com "início" deixava
+// duas entradas de início na pilha e o voltar parecia não fazer nada).
+const restaurado = history.state as EstadoHistorico | null;
+if (restaurado && typeof restaurado.prof === 'number' && ['inicio', 'preparar', 'tabela', 'leitura'].includes(restaurado.tela)) {
+  estadoAtual = restaurado;
+} else {
+  history.replaceState(estadoAtual, '');
+}
+mostrar(estadoAtual.tela);
 
 if ('serviceWorker' in navigator && import.meta.env.PROD) {
   const jaControlada = !!navigator.serviceWorker.controller;

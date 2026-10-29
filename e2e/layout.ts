@@ -54,9 +54,22 @@ export async function checarLayout(page: Page, opcoes: OpcoesLayout = {}): Promi
           break;
         }
       }
-      // Coberto por outro elemento (ex.: barra presa por cima): o centro tem que ser dele.
-      const no = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
-      if (no && no !== e && !e.contains(no)) erros.push(`${id}: coberto por ${no.getAttribute('data-testid') ?? no.className ?? no.tagName}`);
+      // Coberto por outro elemento (ex.: barra presa por cima): centro e os quatro cantos internos.
+      const m = Math.min(6, r.width / 4, r.height / 4);
+      const pontos: Array<[number, number]> = [
+        [r.left + r.width / 2, r.top + r.height / 2],
+        [r.left + m, r.top + m],
+        [r.right - m, r.top + m],
+        [r.left + m, r.bottom - m],
+        [r.right - m, r.bottom - m],
+      ];
+      for (const [x, y] of pontos) {
+        const no = document.elementFromPoint(x, y);
+        if (no && no !== e && !e.contains(no)) {
+          erros.push(`${id}: coberto por ${no.getAttribute('data-testid') ?? no.className ?? no.tagName} em (${Math.round(x)}, ${Math.round(y)})`);
+          break;
+        }
+      }
     }
 
     // 3. Alvos de toque ≥ 48 × 48 (checkbox conta pelo rótulo que o envolve).
@@ -75,7 +88,9 @@ export async function checarLayout(page: Page, opcoes: OpcoesLayout = {}): Promi
       if (r.width < 47.5 || r.height < 47.5) erros.push(`alvo pequeno: ${nome(a)} ${Math.round(r.width)}×${Math.round(r.height)}`);
     }
 
-    // 4. Contraste (WCAG 2.x). Fundo efetivo = composição dos fundos dos ancestrais.
+    // 4. Contraste (WCAG 2.x). Fundo efetivo = composição das cores de fundo dos ancestrais. Limite:
+    // gradiente e imagem de fundo não entram (o app só tem gradiente no rodapé da conferência, atrás de
+    // botões de fundo sólido).
     const rgba = (c: string): [number, number, number, number] => {
       const m = c.match(/rgba?\(([^)]+)\)/);
       if (!m) return [0, 0, 0, 0];

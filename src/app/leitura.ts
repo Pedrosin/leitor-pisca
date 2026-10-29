@@ -145,7 +145,11 @@ export function telaLeitura(nav: Navegar): TelaLeitura {
       const achada = b.sugestao;
       esconderPergunta();
       if (!achada || processo.width === 0) return;
-      leitor = new Leitor(achada, processo.width, processo.height);
+      // Vira a região marcada: se a câmera trocar de resolução antes do primeiro quadro, o Leitor é
+      // refeito nela (antes caía no centro da imagem).
+      regiaoTocada = { cx: achada.cx, cy: achada.cy, raio: achada.raio };
+      avisoSairEm = -Infinity;
+      leitor = new Leitor(regiaoTocada, processo.width, processo.height);
       achadaSozinha = true;
       confirmadosBusca = b.confirmados;
       buscador = null;
@@ -168,6 +172,8 @@ export function telaLeitura(nav: Navegar): TelaLeitura {
 
   function limparLeitura(): void {
     esconderPergunta();
+    // Leitura nova: o aviso "volte de novo para sair" de antes não vale para ela.
+    avisoSairEm = -Infinity;
     leitor = null;
     regiaoTocada = null;
     estado = null;
@@ -195,6 +201,7 @@ export function telaLeitura(nav: Navegar): TelaLeitura {
     const regiao: Regiao = { cx, cy, raio: RAIO_TOQUE };
     esconderPergunta();
     regiaoTocada = regiao;
+    avisoSairEm = -Infinity;
     leitor = new Leitor(regiao, processo.width, processo.height);
     buscador = null;
     achadaSozinha = false;
@@ -400,6 +407,7 @@ export function telaLeitura(nav: Navegar): TelaLeitura {
 
   function parar(): void {
     ativo = false;
+    deitado.removeEventListener('change', aoGirar);
     stream?.getTracks().forEach((t) => t.stop());
     void travaTela?.release().catch(() => undefined);
   }
@@ -516,6 +524,16 @@ export function telaLeitura(nav: Navegar): TelaLeitura {
     }
     return false;
   }
+
+  // Girou o celular: o vídeo costuma trocar de proporção (tratado em aoQuadro), mas nem todo navegador
+  // troca; a orientação da tela também recomeça a leitura (o enquadramento mudou de qualquer jeito).
+  const deitado = window.matchMedia('(orientation: landscape)');
+  const aoGirar = () => {
+    if (!ativo || pausado || !leitor) return;
+    limparLeitura();
+    definirStatus('Celular girou. Toque na luz da injeção de novo.', 'alerta', 3000);
+  };
+  deitado.addEventListener('change', aoGirar);
 
   const botaoEncerrar = botao('Encerrar e conferir', encerrar, 'primario');
   botaoEncerrar.setAttribute('data-testid', 'encerrar');

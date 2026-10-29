@@ -180,7 +180,7 @@ async function rodar(c: Cenario, video: string): Promise<boolean> {
     if (erros.length) console.log(`    erros na página: ${erros.join(' | ')}`);
     // Com os códigos confirmados na tela, a ação principal continua dentro da viewport sem rolar.
     const vp = page.viewportSize();
-    const layout = await checarLayout(page, { naTela: ['encerrar', 'marcar-de-novo'] });
+    const layout = await checarLayout(page, { naTela: ['camera', 'painel', 'encerrar', 'marcar-de-novo'] });
     console.log(`    layout ${vp?.width}×${vp?.height} com resultado: ${layout.erros.length ? 'FALHOU' : 'ok'} (${layout.medidas})`);
     for (const e of layout.erros) console.log(`      - ${e}`);
     return ok && layout.erros.length === 0;
@@ -316,12 +316,25 @@ async function provaLayout(video: string): Promise<boolean> {
         // Captura.
         await page.getByRole('button', { name: 'Ler os códigos' }).click();
         await page.waitForFunction(() => ((document.querySelector('[data-testid=camera]') as HTMLCanvasElement | null)?.width ?? 0) > 0);
-        await passo('captura', ['encerrar', 'marcar-de-novo', 'zoom', 'sair', 'ajuda']);
+        await passo('captura', ['camera', 'painel', 'encerrar', 'marcar-de-novo', 'zoom', 'sair', 'ajuda']);
         await page.getByTestId('usar-luz-achada').waitFor({ state: 'visible', timeout: 120000 });
         await passo('pergunta', ['encerrar', 'usar-luz-achada', 'recusar-luz-achada']);
         await page.getByTestId('usar-luz-achada').click();
         await page.waitForTimeout(1500);
-        await passo('lendo', ['encerrar', 'marcar-de-novo']);
+        await passo('lendo', ['camera', 'painel', 'encerrar', 'marcar-de-novo']);
+
+        if (t.nome === '390x844') {
+          // Girar o celular no meio da leitura recomeça (o enquadramento mudou) e avisa.
+          await page.setViewportSize({ width: 844, height: 390 });
+          await page.waitForTimeout(400);
+          const girou = (await page.getByTestId('status').textContent()) ?? '';
+          if (!girou.includes('Celular girou')) erros.push(`girar no meio da leitura: status "${girou}"`);
+          await page.setViewportSize({ width: t.width, height: t.height });
+          await page.waitForTimeout(400);
+          const ponto = await pontoNaImagem(page, 0.5, 0.5);
+          await page.mouse.click(ponto.x, ponto.y);
+          linhas.push(`girar no meio da leitura: ${girou.includes('Celular girou') ? 'recomeçou e avisou' : 'FALHOU'}`);
+        }
 
         // Voltar do sistema no meio da leitura: o primeiro avisa e fica; o segundo sai.
         await page.goBack();
@@ -376,7 +389,8 @@ async function main(): Promise<void> {
     console.log(`App em ${URL_APP}; Chrome: ${CHROME}`);
     console.log('Prova de layout por tela (câmera falsa da busca automática):');
     if (!(await provaLayout(videos[1] as string))) falhas++;
-    for (const [i, c] of CENARIOS.entries()) if (!(await rodar(c, videos[i] as string))) falhas++;
+    // E2E_SO_LAYOUT=1 pula os cenários de leitura (iteração rápida de CSS); a entrega roda tudo.
+    if (!process.env.E2E_SO_LAYOUT) for (const [i, c] of CENARIOS.entries()) if (!(await rodar(c, videos[i] as string))) falhas++;
   } finally {
     servidor.kill();
   }

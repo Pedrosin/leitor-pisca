@@ -235,3 +235,16 @@ Fora desta rodada, e por quê:
 - Modo claro: ver D30.
 - Travar a orientação pela Screen Orientation API: exige tela cheia e não funciona no iPhone.
 - Botão de instalar o PWA: o navegador já oferece.
+
+**Crítica adversarial do layout (Codex, 2026-10-29).** Nenhum achado de severidade alta. Os 8 de média e baixa procediam e foram corrigidos:
+- Reload no meio de uma tela sobrescrevia o estado do histórico com "início", e a pilha ficava com dois inícios. Agora o estado que o navegador devolve é reaproveitado.
+- O aviso "volte de novo para sair" vazava para uma leitura nova ("Marcar de novo", zoom, novo toque). Agora a janela zera.
+- A luz aceita na busca não virava região marcada: se a câmera trocasse de resolução antes do primeiro quadro, o Leitor era refeito no centro da imagem.
+- "Celular girou" dependia só da proporção do vídeo. Agora a mudança de orientação da tela também recomeça a leitura (prova no E2E: girar no meio da leitura em 390×844 → "Celular girou").
+- A prova de "captura numa tela" só checava os botões. Agora exige também a câmera e o painel inteiros na tela. Isso pegou dois defeitos reais, corrigidos:
+  - deitado, com o resultado, a coluna direita esticava a grade e empurrava a câmera para fora;
+  - com texto em 200%, o painel descia por baixo do rodapé.
+  A área de captura agora tem altura fixa e o painel rola por dentro.
+- "Ir para o código" deixava o teclado aberto sobre o cartão. Agora fecha ao completar o número.
+- "Coberto por" olhava só o centro do elemento; agora olha centro e quatro cantos.
+- O contraste calculado só considera cor de fundo sólida (gradiente e imagem ficam de fora). Isso está escrito no `layout.ts`; o único gradiente do app fica atrás de botões de fundo sólido.

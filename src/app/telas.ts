@@ -181,6 +181,8 @@ export function telaTabela(nav: Navegar): HTMLElement {
     destacado = null;
     if (!numero) return;
     const alvo = document.getElementById(`codigo-${Number(numero)}`);
+    // Número completo: fecha o teclado numérico, que senão cobre a metade de baixo do cartão.
+    if (final || numero.length === 2) campo.blur();
     if (alvo) {
       alvo.classList.add('destaque');
       alvo.scrollIntoView({ block: 'start', behavior: 'smooth' });
