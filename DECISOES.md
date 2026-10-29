@@ -309,3 +309,33 @@ Descartado: manter "Leitor de Pisca", que fica em português para quem instala e
 - Motivo: nesse estado ainda não há luz confirmada, então "Encerrar" só mostraria "Nada lido ainda".
 - Medido: em 320×568 com texto em 200%, nos três idiomas, rodapé com a pergunta + "Encerrar" ficava mais alto que a tela (a base do "Encerrar" em 655–704 de 568).
 - O E2E confere que "Encerrar" some com a pergunta e volta inteiro na tela depois do "Sim".
+
+**Crítica adversarial dos idiomas (Codex, 2026-10-29), com retrotradução en→pt e es→pt do aviso do airbag e de todos os passos de "preparar".**
+O aviso do airbag volta com o mesmo sentido nos três idiomas. Nenhum achado estrutural de segurança. O que procedia foi corrigido:
+- **Recolocar o fusível:** nenhum dos três idiomas mandava pôr o fusível BACK UP de volta depois dos 10 s. Agora diz "espere pelo menos 10 segundos e coloque o fusível de volta", e manda conferir o rótulo na tampa da caixa.
+- **Lado com volante à direita:** o pt dizia "deve ser o esquerdo", mais firme que o en ("should be") e o es ("debería"). Os três passaram a dizer "provavelmente é o esquerdo" e mantêm "não conferido em duas fontes".
+- **Cor do SCS:** "normalmente azul" ganhou "(em alguns 92–93 pode ser cinza)", alinhado com a nota de não conferido.
+- **Airbag na nota:** o pt citava só o Brasil. Agora diz "quais versões têm airbag em cada mercado, inclusive no Brasil".
+- **Código 20:** o pt dizia "com o motor rodando" e o en "while driving". A fonte diz que esse código não acende a luz, ponto: os três agora dizem só isso.
+- **Nomes do pt na tabela, alinhados ao en:**
+  - 4: posição do virabrequim (CKP);
+  - 6: temperatura do líquido de arrefecimento (ECT);
+  - 9: posição do cilindro nº 1 (CYP);
+  - 10: ar de admissão (IAT);
+  - 12: gases de escape;
+  - 54: flutuação da rotação do virabrequim (CKF);
+  - 67: eficiência do catalisador.
+- **Código 41:** "não existe no D15B8" era ambíguo; agora é "o D15B8 não tem".
+- **`plural()`:** um `n` passado em `valores` podia trocar o número que escolheu a forma. Agora o `n` vem por último, com teste.
+- **`checarIdioma` dava falso verde** com texto em inglês numa tela em espanhol, em qualquer tela pt-BR, com `<html lang>` errado e com tela vazia. Agora:
+  - exige `lang` igual ao idioma e texto na tela;
+  - procura marcas de outro idioma nos três (`test/marcas-idioma.ts`): palavra inteira com letra Unicode, porque o `\b` do JS deixaria "você" passar;
+  - as mesmas marcas valem para o teste unitário de cada dicionário.
+- **Varredura de texto fixo:** passou a ser recursiva (`src/app`, `src/codigos` inteiros), a ler `JsxText` e a ler o `index.html`, onde só o título e a descrição neutros são permitidos.
+- **Testes novos de idioma:** `es-419`, `zh` sem par, valor salvo inválido e `localStorage` que lança erro.
+Não procediam:
+- "resistencia" é o termo certo em espanhol para resistor;
+- os endônimos do seletor são texto fixo de propósito (D37);
+- `buscarCodigo` já passa por `t()`;
+- `tx` capturado uma vez na tela de leitura não tem efeito, porque o idioma só troca na tela inicial (D37).
+Limites da varredura, registrados: palavra minúscula isolada ("error") e texto passado por chamada técnica (`setItem`, `replace`) não são acusados.

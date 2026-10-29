@@ -35,12 +35,12 @@ export const ptBR = {
       achar: {
         forte: 'Ache o conector de serviço (SCS).',
         texto:
-          'É um conector de 2 pinos, normalmente azul, atrás do painel lateral do lado do passageiro, perto da coluna da porta, na altura do pé. A central da injeção (ECU) fica ali perto.',
+          'É um conector de 2 pinos, normalmente azul (em alguns 92–93 pode ser cinza), atrás do painel lateral do lado do passageiro, perto da coluna da porta, na altura do pé. A central da injeção (ECU) fica ali perto.',
       },
       lado: {
         forte: 'Lado do passageiro:',
         texto:
-          'é o direito em carro com volante à esquerda (Brasil, Américas, Europa continental). Em carro com volante à direita (Reino Unido, Japão, Austrália), deve ser o esquerdo: um manual Honda de exportação também diz "lado do passageiro", mas isso não foi conferido em duas fontes.',
+          'é o direito em carro com volante à esquerda (Brasil, Américas, Europa continental). Em carro com volante à direita (Reino Unido, Japão, Austrália), provavelmente é o esquerdo: um manual Honda de exportação também diz "lado do passageiro", mas isso não foi conferido em duas fontes.',
       },
       naoConfundir: {
         forte: 'Não confunda com o conector de 3 pinos ao lado.',
@@ -77,12 +77,12 @@ export const ptBR = {
       apagar: {
         forte: 'Para apagar os códigos:',
         texto:
-          'com a ignição desligada, tire da caixa de fusíveis do motor, por pelo menos 10 segundos, o fusível BACK UP 7.5 A (em alguns carros o rótulo é BACK UP (RADIO)).',
+          'com a ignição desligada, tire da caixa de fusíveis do motor o fusível BACK UP 7.5 A (em alguns carros o rótulo é BACK UP (RADIO); confira na tampa da caixa), espere pelo menos 10 segundos e coloque o fusível de volta.',
       },
       radio: 'O relógio e as estações do rádio se perdem. Rádio com antifurto pede o código dele ao religar.',
       volta: 'Se o defeito continuar, o código volta.',
     },
-    nota: 'Conferido em fontes públicas (veja a tabela de códigos). Ainda não conferido: a cor do SCS nos 92–93 (uma fonte diz cinza); se o Civic vendido no Brasil tem airbag em todas as versões; o lado do SCS e o rótulo do fusível em carro com volante à direita, no Japão e na América Latina.',
+    nota: 'Conferido em fontes públicas (veja a tabela de códigos). Ainda não conferido: a cor do SCS nos 92–93 (uma fonte diz cinza); quais versões têm airbag em cada mercado, inclusive no Brasil; o lado do SCS e o rótulo do fusível em carro com volante à direita, no Japão e na América Latina.',
   },
   tabela: {
     titulo: 'Tabela de códigos',
@@ -184,7 +184,7 @@ export const ptBR = {
       conferir: 'Conector e chicote do MAP, alimentação de 5 V, o próprio sensor.',
     },
     4: {
-      nome: 'Sensor de rotação (CKP), no distribuidor',
+      nome: 'Sensor de posição do virabrequim (CKP), no distribuidor',
       causa: 'Circuito aberto ou em curto.',
       conferir: 'Conector do distribuidor e chicote; sensor dentro do distribuidor.',
     },
@@ -195,7 +195,7 @@ export const ptBR = {
       nota: 'P1, P2 e MW: falha mecânica (vácuo). P3 descreve como elétrica.',
     },
     6: {
-      nome: 'Sensor de temperatura do motor (ECT)',
+      nome: 'Sensor de temperatura do líquido de arrefecimento (ECT)',
       causa: 'Circuito aberto ou em curto.',
       conferir: 'Sensor no cabeçote/carcaça da válvula termostática, conector e chicote.',
     },
@@ -210,12 +210,12 @@ export const ptBR = {
       conferir: 'Conector do distribuidor e chicote.',
     },
     9: {
-      nome: 'Sensor de cilindro nº 1 (CYP), no distribuidor',
+      nome: 'Sensor de posição do cilindro nº 1 (CYP), no distribuidor',
       causa: 'Circuito aberto ou em curto.',
       conferir: 'Conector do distribuidor e chicote.',
     },
     10: {
-      nome: 'Sensor de temperatura do ar (IAT)',
+      nome: 'Sensor de temperatura do ar de admissão (IAT)',
       causa: 'Circuito aberto ou em curto.',
       conferir: 'Sensor na caixa do filtro ou no coletor, conector e chicote.',
     },
@@ -226,7 +226,7 @@ export const ptBR = {
       nota: 'ETCG e DEP: ECU. Outra fonte: módulo de ignição. Não está nas tabelas de Civic 92–95.',
     },
     12: {
-      nome: 'Sistema EGR (recirculação de gases)',
+      nome: 'Sistema EGR (recirculação dos gases de escape)',
       causa: 'O EGR não está agindo.',
       conferir: 'Solenoide do EGR, mangueiras de vácuo, sensor de posição da válvula.',
       aplica: 'Só motor com EGR',
@@ -267,7 +267,7 @@ export const ptBR = {
       nome: 'Detector de carga elétrica (ELD)',
       causa: 'Circuito do ELD (na caixa de fusíveis do motor).',
       conferir: 'ELD na caixa de fusíveis, conector e chicote.',
-      nota: 'Este código não acende a luz com o motor rodando: só fica gravado e aparece no pisca.',
+      nota: 'Este código não acende a luz: só fica gravado e aparece no pisca.',
     },
     21: {
       nome: 'Solenoide do VTEC',
@@ -306,7 +306,7 @@ export const ptBR = {
       nome: 'Aquecedor da sonda',
       causa: 'Circuito do aquecedor aberto ou em curto.',
       conferir: 'Fusível e alimentação do aquecedor, conector da sonda, a própria sonda.',
-      aplica: 'Motores com sonda aquecida (não existe no D15B8)',
+      aplica: 'Motores com sonda aquecida (o D15B8 não tem)',
       nota: 'No D15Z1 (VX) é o aquecedor do sensor LAF.',
     },
     43: {
@@ -329,7 +329,7 @@ export const ptBR = {
       aplica: 'Só D15Z1 (Civic VX)',
     },
     54: {
-      nome: 'Flutuação do sinal de rotação (CKF)',
+      nome: 'Flutuação da rotação do virabrequim (CKF)',
       causa: 'Sinal de rotação instável.',
       conferir: 'Sensor de rotação e chicote.',
       aplica: 'Provavelmente 95+ ou outro modelo',
@@ -364,7 +364,7 @@ export const ptBR = {
     },
     67: {
       nome: 'Eficiência do catalisador',
-      causa: 'Catalisador abaixo do esperado.',
+      causa: 'Eficiência do catalisador abaixo do esperado.',
       conferir: 'Catalisador e sondas.',
       aplica: 'Carros com sonda pós-catalisador (96+ ou OBD1 de transição)',
       nota: 'Não existe no Civic 92–95.',

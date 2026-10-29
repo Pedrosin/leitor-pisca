@@ -76,5 +76,6 @@ export function fmt(modelo: string, valores: Record<string, string | number> = {
 /** Plural pela regra do idioma atual (Intl.PluralRules), com {n} e outros marcadores. */
 export function plural(p: Plural, n: number, valores: Record<string, string | number> = {}): string {
   const categoria = new Intl.PluralRules(atual).select(n) as keyof Plural;
-  return fmt(p[categoria] ?? p.other, { n, ...valores });
+  // n por último: um `n` em `valores` não pode trocar o número que escolheu a forma do plural.
+  return fmt(p[categoria] ?? p.other, { ...valores, n });
 }

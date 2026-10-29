@@ -10,13 +10,15 @@ import { join } from 'node:path';
 import ts from 'typescript';
 
 const RAIZ = join(import.meta.dirname, '..');
-const ARQUIVOS = [
-  ...readdirSync(join(RAIZ, 'src/app'))
-    .filter((f) => f.endsWith('.ts') && !f.endsWith('.d.ts'))
-    .map((f) => `src/app/${f}`),
-  'src/codigos/tabela.ts',
-  'src/i18n/index.ts',
-];
+/** Todo .ts/.tsx de uma pasta, com subpastas. */
+function codigoDe(pasta: string): string[] {
+  return readdirSync(join(RAIZ, pasta), { recursive: true, encoding: 'utf-8' })
+    .map((f) => f.replace(/\\/g, '/'))
+    .filter((f) => /\.tsx?$/.test(f) && !f.endsWith('.d.ts'))
+    .map((f) => `${pasta}/${f}`);
+}
+
+const ARQUIVOS = [...codigoDe('src/app'), ...codigoDe('src/codigos'), 'src/i18n/index.ts'];
 
 /** Exceções que são texto mas não se traduzem, cada uma com o motivo. */
 const EXCECOES: Record<string, string> = {
@@ -127,6 +129,7 @@ describe('varredura de textos fixos', () => {
     const visitar = (no: ts.Node) => {
       const textos: string[] = [];
       if (ts.isStringLiteral(no) || ts.isNoSubstitutionTemplateLiteral(no)) textos.push(no.text);
+      if (ts.isJsxText(no)) textos.push(no.text);
       if (ts.isTemplateExpression(no)) {
         textos.push(no.head.text, ...no.templateSpans.map((s) => s.literal.text));
       }
@@ -139,6 +142,18 @@ describe('varredura de textos fixos', () => {
     };
     visitar(fonte);
     expect(achados).toEqual([]);
+  });
+
+  // O index.html aparece antes do JS rodar: título e descrição neutros (nome do app instalado e inglês,
+  // o idioma do resto do mundo), trocados no início por main.ts. Nada mais de texto pode morar lá.
+  test('index.html só tem o título e a descrição neutros', () => {
+    const html = readFileSync(join(RAIZ, 'index.html'), 'utf-8').replace(/<!--[\s\S]*?-->/g, '');
+    const permitidos = ['OBD1 Blink', 'Reads the Check Engine light blink codes of 1992–1995 OBD1 Hondas through the camera.'];
+    const textos = [
+      ...[...html.matchAll(/>([^<>]+)</g)].map((m) => (m[1] as string).trim()),
+      ...[...html.matchAll(/\b(?:content|alt|title|aria-label|placeholder)="([^"]*)"/g)].map((m) => m[1] as string),
+    ].filter((x) => pareceTexto(x));
+    expect(textos.filter((x) => !permitidos.includes(x))).toEqual([]);
   });
 
   test('a varredura pega texto fixo (controle: ela não é cega)', () => {

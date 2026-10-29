@@ -36,12 +36,12 @@ export const es: Dicionario = {
       achar: {
         forte: 'Ubique el conector de verificación de servicio (SCS).',
         texto:
-          'Es un conector de 2 pines, normalmente azul, detrás del panel lateral del lado del pasajero, cerca del pilar de la puerta, a la altura de los pies. La computadora del motor (ECU) está cerca.',
+          'Es un conector de 2 pines, normalmente azul (en algunos 92–93 puede ser gris), detrás del panel lateral del lado del pasajero, cerca del pilar de la puerta, a la altura de los pies. La computadora del motor (ECU) está cerca.',
       },
       lado: {
         forte: 'Lado del pasajero:',
         texto:
-          'es el derecho en autos con volante a la izquierda (América, Europa continental). En autos con volante a la derecha (Reino Unido, Japón, Australia) debería ser el izquierdo: un manual Honda de exportación también dice "lado del pasajero", pero no está verificado en dos fuentes.',
+          'es el derecho en autos con volante a la izquierda (América, Europa continental). En autos con volante a la derecha (Reino Unido, Japón, Australia) probablemente es el izquierdo: un manual Honda de exportación también dice "lado del pasajero", pero no está verificado en dos fuentes.',
       },
       naoConfundir: {
         forte: 'No lo confunda con el conector de 3 pines que está al lado.',
@@ -79,7 +79,7 @@ export const es: Dicionario = {
       apagar: {
         forte: 'Para borrar los códigos:',
         texto:
-          'con el encendido apagado, saque de la caja de fusibles del motor, durante al menos 10 segundos, el fusible BACK UP 7.5 A (en algunos autos dice BACK UP (RADIO)).',
+          'con el encendido apagado, saque de la caja de fusibles del motor el fusible BACK UP 7.5 A (en algunos autos dice BACK UP (RADIO); revise la tapa de la caja), espere al menos 10 segundos y vuelva a colocar el fusible.',
       },
       radio: 'Se pierden el reloj y las emisoras de la radio. Una radio con antirrobo pedirá su código al volver la corriente.',
       volta: 'Si la falla sigue, el código vuelve.',
@@ -269,7 +269,7 @@ export const es: Dicionario = {
       nome: 'Detector de carga eléctrica (ELD)',
       causa: 'Circuito del ELD (en la caja de fusibles del motor).',
       conferir: 'ELD en la caja de fusibles, conector y cableado.',
-      nota: 'Este código no enciende la luz con el motor en marcha: solo queda guardado y aparece en el parpadeo.',
+      nota: 'Este código no enciende la luz: solo queda guardado y aparece en el parpadeo.',
     },
     21: {
       nome: 'Solenoide del VTEC',
@@ -308,7 +308,7 @@ export const es: Dicionario = {
       nome: 'Calefactor del sensor de oxígeno',
       causa: 'Circuito del calefactor abierto o en corto.',
       conferir: 'Fusible y alimentación del calefactor, conector del sensor, el propio sensor.',
-      aplica: 'Motores con sensor calefaccionado (no existe en el D15B8)',
+      aplica: 'Motores con sensor calefaccionado (el D15B8 no lo tiene)',
       nota: 'En el D15Z1 (VX) es el calefactor del sensor LAF.',
     },
     43: {

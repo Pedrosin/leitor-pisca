@@ -2,7 +2,9 @@
 // {marcadores}; detecção de idioma e plural pelo Intl.PluralRules.
 
 import { describe, test, expect, beforeEach } from 'vitest';
-import { IDIOMAS, detectar, definirIdioma, fmt, plural, t, type Dicionario, type Idioma } from '../src/i18n';
+import { afterEach, vi } from 'vitest';
+import { IDIOMAS, detectar, definirIdioma, fmt, idiomaInicial, plural, t, type Dicionario, type Idioma } from '../src/i18n';
+import { marcaEstrangeira } from './marcas-idioma';
 import { NUMEROS, buscarCodigo, codigos, fontes } from '../src/codigos/tabela';
 
 type No = string | { [k: string]: No };
@@ -57,6 +59,14 @@ describe.each(ids)('dicionário %s', (id) => {
     }
   });
 
+  test('cada texto está no próprio idioma (sem marca de outro; títulos de fontes ficam de fora)', () => {
+    const fora = [...f.entries()]
+      .filter(([c]) => !c.startsWith('fontes.'))
+      .map(([c, s]) => [c, marcaEstrangeira(id, s)] as const)
+      .filter(([, m]) => m);
+    expect(fora.map(([c, m]) => `${c}: "${m}"`)).toEqual([]);
+  });
+
   test('tabela, fontes e código desconhecido saem no idioma', () => {
     definirIdioma(id);
     expect(codigos()).toHaveLength(33);
@@ -89,9 +99,32 @@ describe('detecção do idioma', () => {
     [['fr-FR'], 'en'],
     [['ja-JP', 'th-TH'], 'en'],
     [['fr-FR', 'es-AR'], 'es'],
+    [['es-419'], 'es'],
+    [['zh-CN', 'pt-BR'], 'pt-BR'],
+    [['zh-CN'], 'en'],
     [[], 'en'],
   ] as const)('%j → %s', (prefs, esperado) => {
     expect(detectar(prefs)).toBe(esperado);
+  });
+});
+
+describe('escolha salva', () => {
+  afterEach(() => vi.unstubAllGlobals());
+  test('escolha salva vale sobre o navegador', () => {
+    vi.stubGlobal('localStorage', { getItem: () => 'es', setItem: () => undefined });
+    expect(idiomaInicial(['en-US'])).toBe('es');
+  });
+  test('valor salvo inválido cai na detecção', () => {
+    vi.stubGlobal('localStorage', { getItem: () => 'klingon', setItem: () => undefined });
+    expect(idiomaInicial(['pt-BR'])).toBe('pt-BR');
+  });
+  test('localStorage que lança erro (aba privada, bloqueio) cai na detecção e salvar não quebra', () => {
+    const erro = () => {
+      throw new Error('SecurityError');
+    };
+    vi.stubGlobal('localStorage', { getItem: erro, setItem: erro });
+    expect(idiomaInicial(['es-MX'])).toBe('es');
+    expect(() => definirIdioma('en', true)).not.toThrow();
   });
 });
 
@@ -108,6 +141,9 @@ describe('plural e marcadores', () => {
     definirIdioma('es');
     expect(plural(t().conferencia.descartadas, 1)).toMatch(/^1 lectura descartada/);
     expect(plural(t().conferencia.descartadas, 3)).toMatch(/^3 lecturas descartadas/);
+  });
+  test('o n de valores não troca o número que escolheu a forma do plural', () => {
+    expect(plural({ one: '{n} item', other: '{n} itens' }, 1, { n: 5 })).toBe('1 item');
   });
   test('fmt troca marcador e deixa o que falta', () => {
     expect(fmt('{a} e {b}', { a: 1 })).toBe('1 e {b}');

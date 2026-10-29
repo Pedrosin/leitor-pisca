@@ -3,6 +3,7 @@
 // controle calculado das cores computadas (WCAG); elementos pedidos dentro da viewport sem rolar.
 
 import type { Page } from 'playwright-core';
+import { MARCAS_ESTRANGEIRAS } from '../test/marcas-idioma';
 
 export interface ResultadoLayout {
   erros: string[];
@@ -204,34 +205,46 @@ export async function pontoNaImagem(page: Page, cx: number, cy: number): Promise
 }
 
 /**
- * Texto fora do idioma da tela: varre o texto visível e os rótulos (aria-label, placeholder, title),
- * pulando o que declara outro idioma em `lang` (o seletor mostra cada idioma no próprio idioma).
- * en: nenhuma letra fora do ASCII. es: nenhuma marca do português (ã, õ, ç, "não", "você", "é" sozinho).
+ * Texto fora do idioma da tela, nos três idiomas: `<html lang>` tem que ser o idioma; a tela tem que ter
+ * texto (tela vazia não passa); e nenhum texto visível, `aria-label`, placeholder, title ou título da aba
+ * pode ter marca de outro idioma (test/marcas-idioma.ts). Pula o que declara outro `lang` (o seletor
+ * mostra cada idioma no próprio idioma) e a lista de fontes (títulos de site no idioma original).
  */
 export async function checarIdioma(page: Page, idioma: string): Promise<string[]> {
-  if (idioma === 'pt-BR') return [];
-  return page.evaluate((id) => {
-    const proibido = id === 'en' ? /(?![A-Za-z])\p{L}/u : /[ãõç]|\bnão\b|\bvocê\b|(^|\s)é(\s|$)/iu;
-    const achados: string[] = [];
-    const doIdioma = (e: Element | null) => {
-      const comLang = e?.closest('[lang]');
-      return !comLang || comLang === document.documentElement || comLang.getAttribute('lang') === id;
-    };
-    const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
-    for (let n = walker.nextNode(); n; n = walker.nextNode()) {
-      const texto = n.textContent ?? '';
-      const pai = n.parentElement;
-      if (!texto.trim() || !pai || !doIdioma(pai) || pai.closest('[hidden]')) continue;
-      if (proibido.test(texto)) achados.push(`"${texto.trim().slice(0, 60)}"`);
-    }
-    for (const e of document.querySelectorAll('[aria-label], [placeholder], [title]')) {
-      if (!doIdioma(e)) continue;
-      for (const a of ['aria-label', 'placeholder', 'title']) {
-        const v = e.getAttribute(a);
-        if (v && proibido.test(v)) achados.push(`${a}="${v.slice(0, 60)}"`);
+  return page.evaluate(
+    ([id, padrao]) => {
+      const proibido = new RegExp(padrao as string, 'u');
+      const achados: string[] = [];
+      if (document.documentElement.lang !== id) achados.push(`<html lang="${document.documentElement.lang}">`);
+      const doIdioma = (e: Element | null) => {
+        if (e?.closest('.fontes')) return false;
+        const comLang = e?.closest('[lang]');
+        return !comLang || comLang === document.documentElement || comLang.getAttribute('lang') === id;
+      };
+      let textoVisto = 0;
+      const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+      for (let n = walker.nextNode(); n; n = walker.nextNode()) {
+        const texto = n.textContent ?? '';
+        const pai = n.parentElement;
+        if (!texto.trim() || !pai || pai.closest('[hidden]')) continue;
+        textoVisto += texto.trim().length;
+        if (!doIdioma(pai)) continue;
+        const m = proibido.exec(texto);
+        if (m) achados.push(`"${m[0]}" em "${texto.trim().slice(0, 60)}"`);
       }
-    }
-    if (proibido.test(document.title)) achados.push(`título "${document.title}"`);
-    return achados;
-  }, idioma);
+      if (textoVisto < 20) achados.push('tela sem texto');
+      for (const e of document.querySelectorAll('[aria-label], [placeholder], [title]')) {
+        if (!doIdioma(e)) continue;
+        for (const a of ['aria-label', 'placeholder', 'title']) {
+          const v = e.getAttribute(a);
+          const m = v ? proibido.exec(v) : null;
+          if (m) achados.push(`"${m[0]}" em ${a}="${(v as string).slice(0, 60)}"`);
+        }
+      }
+      const mt = proibido.exec(document.title);
+      if (mt) achados.push(`"${mt[0]}" no título "${document.title}"`);
+      return achados;
+    },
+    [idioma, MARCAS_ESTRANGEIRAS[idioma] ?? '$^'],
+  );
 }

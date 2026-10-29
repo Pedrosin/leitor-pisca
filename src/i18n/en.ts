@@ -35,12 +35,12 @@ export const en: Dicionario = {
       achar: {
         forte: 'Find the service check connector (SCS).',
         texto:
-          'It is a 2-pin connector, usually blue, behind the kick panel on the passenger side, near the door pillar, at foot level. The engine computer (ECU) is close by.',
+          'It is a 2-pin connector, usually blue (it may be gray on some 92–93 cars), behind the kick panel on the passenger side, near the door pillar, at foot level. The engine computer (ECU) is close by.',
       },
       lado: {
         forte: 'Passenger side:',
         texto:
-          'the right side on left-hand-drive cars (US, Canada, Latin America, continental Europe). On right-hand-drive cars (UK, Japan, Australia) it should be the left side: a Honda export manual also says "passenger side", but this is not confirmed by two sources.',
+          'the right side on left-hand-drive cars (US, Canada, Latin America, continental Europe). On right-hand-drive cars (UK, Japan, Australia) it is probably the left side: a Honda export manual also says "passenger side", but this is not confirmed by two sources.',
       },
       naoConfundir: {
         forte: 'Do not confuse it with the 3-pin connector next to it.',
@@ -77,7 +77,7 @@ export const en: Dicionario = {
       apagar: {
         forte: 'To clear the codes:',
         texto:
-          'with the ignition off, pull the BACK UP 7.5 A fuse (labeled BACK UP (RADIO) on some cars) from the under-hood fuse box for at least 10 seconds.',
+          'with the ignition off, pull the BACK UP 7.5 A fuse (labeled BACK UP (RADIO) on some cars; check the fuse box lid) from the under-hood fuse box, wait at least 10 seconds and put the fuse back.',
       },
       radio: 'The clock and radio presets are lost. An anti-theft radio will ask for its code when power comes back.',
       volta: 'If the fault is still there, the code comes back.',
@@ -267,7 +267,7 @@ export const en: Dicionario = {
       nome: 'Electrical load detector (ELD)',
       causa: 'ELD circuit (in the under-hood fuse box).',
       conferir: 'ELD in the fuse box, connector and wiring.',
-      nota: 'This code does not turn the light on while driving: it is only stored and shows up in the blink code.',
+      nota: 'This code does not turn the light on: it is only stored and shows up in the blink code.',
     },
     21: {
       nome: 'VTEC solenoid',
@@ -306,7 +306,7 @@ export const en: Dicionario = {
       nome: 'Oxygen sensor heater',
       causa: 'Heater circuit open or shorted.',
       conferir: 'Heater fuse and power supply, sensor connector, the sensor itself.',
-      aplica: 'Engines with a heated sensor (not on the D15B8)',
+      aplica: 'Engines with a heated sensor (the D15B8 has none)',
       nota: 'On the D15Z1 (VX) it is the LAF sensor heater.',
     },
     43: {
