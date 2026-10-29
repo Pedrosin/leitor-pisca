@@ -159,3 +159,79 @@ Os 6 achados procediam e foram corrigidos:
 - O service worker apagava caches de outros apps da mesma origem (pedrosin.github.io). Agora só apaga os `leitor-pisca-*`.
 - A gravação no cache não segurava o evento (`waitUntil`).
 - O teste de recusa podia passar sem recusar nada. Agora exige que a recusa aconteça.
+
+## Layout para o celular (2026-10-29)
+
+Régua: a pessoa está dentro do carro parado, com uma mão no celular apontando para o painel, às vezes de noite. A leitura leva de 30 s a 2 min e ninguém rola a página nesse tempo.
+Medição antes da mudança (Chrome em modo celular, câmera falsa, com a pergunta da busca aberta): a base do "Encerrar e conferir" ficava em 873 px numa tela de 640, 895/844, 887/915 e 1006/390 deitado. Sem a pergunta, deitado já ficava em 599/390. O "Voltar" tinha 44 px.
+
+**D25. Captura em tela única, com a ação presa embaixo.**
+A tela de leitura vira uma grade de `100dvh` (fallback `100vh`):
+- barra no topo (Voltar · Ajuda; o título fica só para leitor de tela);
+- a câmera com o que sobra;
+- o painel (status, piscas, lidos, confirmados em chips de uma linha);
+- o rodapé preso, com `safe-area-inset-bottom`.
+
+A pergunta da busca ("é a luz da injeção?") mora no rodapé, junto das ações, e enquanto ela está aberta o "Marcar de novo" some, porque o "Não, é outra" faz o mesmo papel. Se não couber (texto do aparelho muito ampliado), a captura rola por dentro e o rodapé continua na tela.
+Descartado:
+- página que rola, como era;
+- botão flutuante sobre a câmera, que cobre a imagem onde se toca;
+- pergunta por cima da câmera: com texto em 200% os botões ficavam cortados;
+- pergunta numa linha própria: em 320 px a barra presa a cobria.
+O que provou os três últimos: a checagem de "cortado por ancestral" e de "coberto por outro elemento" em `e2e/layout.ts`.
+
+**D26. Orientação: o PWA instalado continua travado em pé, e o navegador ganhou layout deitado.**
+Deitado, a câmera fica de um lado e o painel com as ações do outro, com `safe-area` nos quatro lados.
+Descartado: liberar `any` no manifest. O motivo:
+- a leitura é de uma lâmpada só, e não do painel inteiro;
+- em pé se segura com uma mão;
+- girar no meio da leitura muda o enquadramento.
+Na aba do navegador o manifest não vale e o celular gira de qualquer jeito, por isso o layout deitado existe e é provado (844×390). Se o vídeo da câmera vira de deitado para em pé no meio da leitura, a leitura recomeça com o aviso "Celular girou. Toque na luz de novo". Antes, o toque normalizado era reaproveitado e passava a apontar para outro lugar da imagem.
+
+**D27. Puxar para atualizar desligado (`overscroll-behavior-y: none` no html).**
+O Chrome Android, fora do PWA, recarregava a página no meio da leitura.
+Descartado: `beforeunload`, que o celular ignora ou mostra fora de hora.
+
+**D28. Zoom digital 1× → 2× → 3× (recorte do centro do vídeo) em vez de lupa ou zoom da câmera.**
+- O que dificulta é enxergar uma luz pequena numa imagem pequena, e não acertar o ponto: o refinador já acha a lâmpada a até ~17% da largura do toque.
+- O recorte também entrega mais pixels da lâmpada ao decodificador (que não mudou), e funciona igual em qualquer navegador.
+- Trocar o zoom recomeça a leitura, porque o enquadramento mudou.
+- O toque desconta a faixa preta do `object-fit: contain`.
+- Prova: E2E `zoom-2x-toque-3` (toque na imagem ampliada lê o [3]).
+Descartado:
+- `applyConstraints({ zoom })`: só existe em parte dos Android e não no iPhone;
+- lupa ao tocar: mais complexa e resolve o problema errado.
+
+**D29. Toque.**
+- Todo alvo tem ≥ 48 px: "Voltar" e "Ajuda" tinham 44 px; o rótulo "usar este código" ganhou caixa de 24 px.
+- `touch-action: manipulation` em botões e rótulos, sem o realce azul do toque.
+- `:active` visível (o celular não tem hover).
+
+**D30. Contraste calculado, não no olho.**
+- O texto já passava. Os piores casos são o aviso vermelho (5,27:1) e o `--texto-2` (7,31:1 sobre a superfície, 8,11:1 sobre o fundo); o âmbar dá 9,2–10,3:1.
+- O que falhava era o contorno de botão secundário e de campo: 1,26–1,40:1, contra o mínimo de 3:1 (WCAG 1.4.11), o que pesa sob o sol. Agora `--borda-controle #6c727d` dá 3,49–3,87:1.
+- O E2E calcula o contraste a partir das cores computadas de cada texto visível e de cada contorno, em todas as telas.
+Fora: modo claro para sol forte, porque a tela escura serve à noite e o texto já passa do AAA.
+
+**D31. Tabela com "Ir para o código".**
+- Campo preso no topo, com teclado numérico. Ao digitar o número, a tela rola até o cartão e o destaca.
+- Código fora da tabela recebe a orientação geral: repetir a leitura; se voltar, suspeitar da ECU.
+Descartado: uma grade de números clicáveis, que repete a lista e, com 33 códigos, ocupa uma tela inteira.
+
+**D32. Voltar do Android.**
+- Cada tela entra no histórico.
+- Na conferência, voltar retorna à captura.
+- Com leitura começada (luz marcada ou aceita), o primeiro voltar avisa ("Leitura em andamento. Volte de novo para sair.") e o segundo, em até 4 s, sai. Sem luz marcada, sai direto.
+- O "Voltar" do app sai sem aviso: é um gesto deliberado.
+Descartado: `confirm()`, que bloqueia, tem visual do sistema e no PWA às vezes nem aparece.
+
+**D33. Vibração quando a leitura confirma.** Só funciona no Android; o iPhone ignora. Quem está olhando o painel sente.
+
+**D34. Texto em `rem`, que segue o tamanho de texto do aparelho.** Os botões empilham quando o texto é grande e não partem palavra (`overflow-wrap: break-word` no lugar de `anywhere`; o E2E confere "palavra partida").
+
+Fora desta rodada, e por quê:
+- Lupa: ver D28.
+- Zoom da câmera: ver D28. Pode entrar depois como melhoria de nitidez no Android.
+- Modo claro: ver D30.
+- Travar a orientação pela Screen Orientation API: exige tela cheia e não funciona no iPhone.
+- Botão de instalar o PWA: o navegador já oferece.

@@ -1,7 +1,10 @@
 :root {
   --fundo: #111214;
   --superficie: #1b1d21;
+  /* Borda decorativa (cartões). */
   --borda: #2c2f35;
+  /* Contorno de controle (botão secundário, campo): ≥ 3:1 sobre fundo e superfície (D30). */
+  --borda-controle: #6c727d;
   --texto: #eceef1;
   --texto-2: #a5abb5;
   --ambar: #ffb020;
@@ -10,6 +13,8 @@
   --perigo-fundo: #3a1512;
   --ok: #45c46b;
   --raio: 14px;
+  /* Alvo mínimo de toque (D29). */
+  --alvo: 48px;
   color-scheme: dark;
 }
 
@@ -17,25 +22,40 @@
   box-sizing: border-box;
 }
 
+html {
+  /* Puxar para baixo no Chrome Android recarregava a página no meio da leitura (D27). */
+  overscroll-behavior-y: none;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
 html,
 body {
   margin: 0;
   background: var(--fundo);
   color: var(--texto);
-  font: 17px/1.45 system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
-  -webkit-text-size-adjust: 100%;
+  /* Em rem: segue o tamanho de texto escolhido no aparelho/navegador. */
+  font: 1.0625rem/1.45 system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  -webkit-tap-highlight-color: transparent;
 }
 
 main {
   max-width: 640px;
   margin: 0 auto;
-  padding: max(16px, env(safe-area-inset-top)) 16px max(24px, env(safe-area-inset-bottom));
+  padding: max(16px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) max(24px, env(safe-area-inset-bottom))
+    max(16px, env(safe-area-inset-left));
+}
+
+main.cheia {
+  max-width: none;
+  padding: 0;
 }
 
 h1 {
   font-size: 1.6rem;
   line-height: 1.2;
   margin: 8px 0 4px;
+  overflow-wrap: break-word;
 }
 
 h2 {
@@ -60,16 +80,26 @@ p {
 button,
 .botao {
   appearance: none;
-  border: 1px solid var(--borda);
+  border: 1px solid var(--borda-controle);
   background: var(--superficie);
   color: var(--texto);
   font: inherit;
   font-weight: 600;
   min-height: 52px;
+  min-width: var(--alvo);
   padding: 12px 16px;
   border-radius: var(--raio);
   text-align: center;
   cursor: pointer;
+  /* Sem atraso de toque duplo e sem zoom acidental ao tocar rápido. */
+  touch-action: manipulation;
+  overflow-wrap: break-word;
+}
+
+/* Celular não tem hover: o toque precisa de resposta visível. */
+button:active:not(:disabled) {
+  transform: scale(0.97);
+  filter: brightness(1.25);
 }
 
 button.primario {
@@ -78,13 +108,20 @@ button.primario {
   border-color: var(--ambar);
 }
 
-button.voltar {
-  min-height: 44px;
-  padding: 8px 14px;
-  font-weight: 500;
+button.primario:active:not(:disabled) {
+  filter: brightness(0.9);
 }
 
-button:focus-visible {
+button.voltar {
+  flex: none;
+  min-height: var(--alvo);
+  padding: 8px 14px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+button:focus-visible,
+input:focus-visible {
   outline: 3px solid var(--ambar);
   outline-offset: 2px;
 }
@@ -115,27 +152,161 @@ ol.passos li {
   margin: 10px 0;
 }
 
+.topo {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.erro {
+  color: var(--perigo);
+}
+
+[hidden] {
+  display: none !important;
+}
+
+.so-leitor-de-tela {
+  position: absolute !important;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* ---------- Leitura ---------- */
+
+.leitura {
+  max-width: 640px;
+  margin: 0 auto;
+  padding: max(8px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right)) max(16px, env(safe-area-inset-bottom))
+    max(12px, env(safe-area-inset-left));
+}
+
+.barra {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+/*
+ * Captura: tela inteira sem rolar (D25). A câmera fica com o que sobra; pergunta, painel e ações têm
+ * altura de conteúdo, e a ação principal fica embaixo, na zona do polegar. Se não couber (texto do
+ * aparelho muito ampliado), a captura rola por dentro e a barra de ações continua presa embaixo.
+ */
+.leitura.modo-captura {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  height: 100dvh;
+  padding-bottom: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.captura {
+  flex: 1 0 auto;
+  min-height: 0;
+  display: grid;
+  grid-template-rows: minmax(120px, 1fr) auto auto;
+  gap: 8px;
+  margin-top: 8px;
+}
+
 .camera {
   position: relative;
+  min-height: 120px;
   border-radius: var(--raio);
   overflow: hidden;
   background: #000;
   touch-action: manipulation;
-  margin: 12px 0;
 }
 
 .camera canvas {
   display: block;
   width: 100%;
-  height: auto;
+  height: 100%;
+  object-fit: contain;
 }
 
 .camera video {
   display: none;
 }
 
+.dica-camera {
+  position: absolute;
+  top: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  margin: 0;
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: rgba(10, 10, 10, 0.78);
+  color: var(--texto);
+  font-size: 0.95rem;
+  white-space: nowrap;
+  pointer-events: none;
+  max-width: calc(100% - 80px);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+button.zoom {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  min-height: var(--alvo);
+  min-width: var(--alvo);
+  padding: 6px 10px;
+  background: rgba(10, 10, 10, 0.78);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Rodapé preso embaixo: pergunta (quando houver) e ações, sempre na zona do polegar. */
+.rodape {
+  position: sticky;
+  bottom: 0;
+  display: grid;
+  gap: 8px;
+  padding-top: 4px;
+  padding-bottom: max(12px, env(safe-area-inset-bottom));
+  background: var(--fundo);
+}
+
+.pergunta {
+  padding: 10px 12px;
+  border-radius: var(--raio);
+  background: var(--superficie);
+  border: 1px solid var(--ambar);
+}
+
+.pergunta p {
+  margin: 0 0 8px;
+}
+
+.duas {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 8em), 1fr));
+  gap: 8px;
+}
+
+.painel {
+  max-height: 32vh;
+  max-height: 32dvh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.painel .status {
+  margin: 0;
+}
+
 .status {
-  font-size: 1.15rem;
+  font-size: 1.05rem;
   font-weight: 600;
   min-height: 1.5em;
 }
@@ -146,15 +317,78 @@ ol.passos li {
 
 .piscas {
   font-size: 1.6rem;
+  line-height: 1.2;
   letter-spacing: 0.15em;
-  min-height: 1.6em;
+  min-height: 1.2em;
   color: var(--ambar);
 }
 
 .lidos {
   color: var(--texto-2);
   font-variant-numeric: tabular-nums;
+  margin: 2px 0;
 }
+
+.confirmados .chip {
+  margin: 4px 0;
+  padding: 6px 10px;
+  border-radius: 10px;
+  background: var(--ambar-escuro);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.chip strong {
+  color: var(--ambar);
+  font-variant-numeric: tabular-nums;
+}
+
+.acoes {
+  display: grid;
+  /* Lado a lado; com texto grande, empilha (a principal fica por último, mais perto do polegar). */
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 8.5em), 1fr));
+  gap: 10px;
+}
+
+/* Conferência e defeitos: a página rola, a ação fica presa embaixo. */
+.acoes-fixas {
+  position: sticky;
+  bottom: 0;
+  margin: 16px -4px 0;
+  padding: 12px 4px max(12px, env(safe-area-inset-bottom));
+  background: linear-gradient(to bottom, rgba(17, 18, 20, 0), var(--fundo) 24%);
+}
+
+/* Celular deitado: câmera de um lado, painel e ações do outro (D26). */
+@media (orientation: landscape) and (max-height: 540px) {
+  .leitura {
+    max-width: none;
+  }
+
+  .captura {
+    grid-template-columns: minmax(0, 1fr) minmax(240px, 40%);
+    grid-template-rows: minmax(0, 1fr) auto;
+  }
+
+  .camera {
+    grid-column: 1;
+    grid-row: 1 / span 2;
+  }
+
+  .painel {
+    grid-column: 2;
+    grid-row: 1;
+    max-height: none;
+  }
+
+  .rodape {
+    grid-column: 2;
+    grid-row: 2;
+  }
+}
+
+/* ---------- Cartões, conferência, tabela ---------- */
 
 .cartao {
   background: var(--superficie);
@@ -162,6 +396,7 @@ ol.passos li {
   border-radius: var(--raio);
   padding: 14px 16px;
   margin: 12px 0;
+  scroll-margin-top: 120px;
 }
 
 .cartao .numero {
@@ -190,6 +425,11 @@ ol.passos li {
   margin: 2px 0 0;
 }
 
+.cartao.destaque {
+  border-color: var(--ambar);
+  box-shadow: 0 0 0 2px var(--ambar);
+}
+
 .selo {
   display: inline-block;
   font-size: 0.8rem;
@@ -214,21 +454,6 @@ ol.passos li {
 
 .fontes a {
   color: var(--texto-2);
-}
-
-.topo {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.erro {
-  color: var(--perigo);
-}
-
-[hidden] {
-  display: none !important;
 }
 
 .mapa {
@@ -257,19 +482,68 @@ ol.passos li {
 .usar {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  min-height: 44px;
+  gap: 10px;
+  min-height: var(--alvo);
+  padding-right: 12px;
+  touch-action: manipulation;
+  cursor: pointer;
 }
 
 .usar input {
-  width: 22px;
-  height: 22px;
+  width: 24px;
+  height: 24px;
+  margin: 0;
   accent-color: var(--ambar);
 }
 
 button:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+.busca-codigo {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  margin: 8px -16px 0;
+  padding: 8px 16px 4px;
+  background: var(--fundo);
+}
+
+.busca-codigo label {
+  display: block;
+  color: var(--texto-2);
+  font-size: 0.95rem;
+}
+
+.linha-busca {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.linha-busca input {
+  min-height: var(--alvo);
+  min-width: 0;
+  padding: 8px 12px;
+  border-radius: var(--raio);
+  border: 1px solid var(--borda-controle);
+  background: var(--superficie);
+  color: var(--texto);
+  font: inherit;
+  font-size: 1.25rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.aviso-busca {
+  color: var(--ambar);
+  margin: 4px 0;
+  min-height: 0;
+}
+
+.aviso-busca:empty {
+  display: none;
 }
 
 .versao {

@@ -1,4 +1,6 @@
 // Tela de leitura: câmera → quadro reduzido em luminância → decodificador (TS puro) → DOM.
+// Layout de captura numa tela só (DECISOES.md D25): a pessoa está com uma mão apontando o celular para o
+// painel e não rola a página; a ação principal fica fixa embaixo, na zona do polegar.
 
 import {
   BuscadorLuz,
@@ -17,6 +19,10 @@ import { botao, cartaoCodigo, h, type Navegar } from './telas';
 const LARGURA_PROCESSO = 160;
 /** Raio do toque em fração da largura: folgado, o refinador afina na lâmpada. */
 const RAIO_TOQUE = 0.07;
+/** Zoom digital: recorte do centro do vídeo. Mais pixels na lâmpada para ver, tocar e ler (D28). */
+const ZOOMS = [1, 2, 3] as const;
+/** Aviso "volte de novo para sair" vale por este tempo. */
+const JANELA_SAIR_MS = 4000;
 
 type QuadroVideo = (agora: number, meta: { mediaTime?: number }) => void;
 type VideoComQuadro = HTMLVideoElement & { requestVideoFrameCallback?: (cb: QuadroVideo) => number };
@@ -51,23 +57,54 @@ function textoSituacao(c: CodigoConferido): string {
   return 'Incompleto: piscas fora do padrão (reflexo ou mão mexendo).';
 }
 
-export function telaLeitura(nav: Navegar): { el: HTMLElement; parar: () => void } {
+/**
+ * Onde a imagem está dentro do canvas na tela. O canvas usa `object-fit: contain`: sobra faixa preta em
+ * cima/embaixo ou nos lados conforme a tela e a orientação, e o toque precisa descontar essa faixa.
+ */
+export function retanguloImagem(canvas: HTMLCanvasElement): { x: number; y: number; w: number; h: number } {
+  const caixa = canvas.getBoundingClientRect();
+  const proporcao = canvas.width / Math.max(1, canvas.height);
+  let w = caixa.width;
+  let altura = caixa.height;
+  let x = caixa.left;
+  let y = caixa.top;
+  if (caixa.width / Math.max(1, caixa.height) > proporcao) {
+    w = altura * proporcao;
+    x += (caixa.width - w) / 2;
+  } else {
+    altura = w / proporcao;
+    y += (caixa.height - altura) / 2;
+  }
+  return { x, y, w, h: altura };
+}
+
+export interface TelaLeitura {
+  el: HTMLElement;
+  parar: () => void;
+  /** Voltar do sistema (Android) chegou: devolve true se a tela tratou e deve ficar. */
+  aoVoltar: () => boolean;
+}
+
+export function telaLeitura(nav: Navegar): TelaLeitura {
   const video = h('video', { playsinline: '', muted: '', autoplay: '' }) as VideoComQuadro;
   video.muted = true;
   const tela = h('canvas', { 'data-testid': 'camera', 'aria-label': 'Imagem da câmera. Toque na luz da injeção.' }) as HTMLCanvasElement;
   const status = h('p', { class: 'status', 'data-testid': 'status', 'aria-live': 'polite' }, 'Abrindo a câmera…');
   const piscas = h('div', { class: 'piscas', 'data-testid': 'piscas', 'aria-hidden': 'true' });
   const lidos = h('p', { class: 'lidos', 'data-testid': 'lidos' });
-  const resultado = h('div', { 'data-testid': 'resultado' });
-  const captura = h('div', { 'data-testid': 'captura' });
-  const conferencia = h('div', { 'data-testid': 'conferencia', hidden: '' });
+  const resultado = h('div', { class: 'confirmados', 'data-testid': 'resultado' });
+  const dica = h('p', { class: 'dica-camera', 'aria-hidden': 'true' }, 'Toque na luz da injeção');
+  const captura = h('div', { class: 'captura', 'data-testid': 'captura' });
+  const conferencia = h('div', { class: 'conferencia', 'data-testid': 'conferencia', hidden: '' });
   /** Encerrou para conferir: os quadros param de entrar na leitura (a câmera segue aberta para voltar). */
   let pausado = false;
   /**
    * A busca automática achou um ponto que pisca: pergunta se é a luz da injeção antes de mostrar código.
-   * Reflexo em ritmo fixo pode imitar código; quem vê o painel decide.
+   * Reflexo em ritmo fixo pode imitar código; quem vê o painel decide. Fica no rodapé preso, junto das
+   * ações: é respondida com o polegar e nunca sai da tela (por cima da câmera, com texto grande, os botões
+   * ficavam cortados; numa linha própria, a barra presa cobria a pergunta em 320 px).
    */
-  const pergunta = h('div', { class: 'cartao pergunta', 'data-testid': 'pergunta-luz', hidden: '' });
+  const pergunta = h('div', { class: 'pergunta', 'data-testid': 'pergunta-luz', hidden: '' });
 
   let leitor: Leitor | null = null;
   let regiaoTocada: Regiao | null = null;
@@ -81,15 +118,26 @@ export function telaLeitura(nav: Navegar): { el: HTMLElement; parar: () => void 
   let travaTela: { release(): Promise<void> } | null = null;
   let ultimoT = -1;
   let ultimosConfirmados = '';
+  let zoom: (typeof ZOOMS)[number] = 1;
+  /** Mensagem de status que o laço da câmera não sobrescreve até este instante (ex.: aviso de sair). */
+  let statusFixoAte = 0;
+  let avisoSairEm = -Infinity;
 
   const processo = document.createElement('canvas');
   const ctxProcesso = processo.getContext('2d', { willReadFrequently: true });
   const ctxTela = tela.getContext('2d');
   let lum = new Uint8Array(0);
 
+  function definirStatus(texto: string, classe = '', fixarMs = 0): void {
+    status.textContent = texto;
+    status.className = `status ${classe}`.trim();
+    if (fixarMs > 0) statusFixoAte = performance.now() + fixarMs;
+  }
+
   function esconderPergunta(): void {
     pergunta.hidden = true;
     pergunta.replaceChildren();
+    botaoMarcar.hidden = false;
   }
 
   function perguntarLuz(b: BuscadorLuz): void {
@@ -102,26 +150,23 @@ export function telaLeitura(nav: Navegar): { el: HTMLElement; parar: () => void 
       confirmadosBusca = b.confirmados;
       buscador = null;
       estado = null;
-      status.textContent = 'Luz confirmada. Lendo…';
+      definirStatus('Luz confirmada. Lendo…');
     }, 'primario');
     sim.setAttribute('data-testid', 'usar-luz-achada');
     const nao = botao('Não, é outra', () => {
       b.recusar();
       esconderPergunta();
-      status.textContent = 'Toque na luz da injeção na imagem (ou espere eu procurar de novo).';
-      status.className = 'status';
+      definirStatus('Toque na luz da injeção, ou espere eu procurar de novo.');
     });
     nao.setAttribute('data-testid', 'recusar-luz-achada');
-    pergunta.replaceChildren(
-      h('p', {}, h('strong', {}, 'Achei uma luz piscando no círculo tracejado. '), 'É a luz da injeção (CHECK ENGINE)?'),
-      h('div', { class: 'botoes' }, sim, nao),
-    );
+    pergunta.replaceChildren(h('p', {}, h('strong', {}, 'Achei uma luz piscando no círculo tracejado.'), ' É a luz da injeção?'), h('div', { class: 'duas' }, nao, sim));
     pergunta.hidden = false;
-    status.textContent = 'Confirme a luz achada, ou toque na luz certa.';
-    status.className = 'status alerta';
+    // Com a pergunta aberta, "Não, é outra" faz o papel de marcar de novo; sobra espaço no rodapé.
+    botaoMarcar.hidden = true;
+    definirStatus('Confirme a luz achada, ou toque na luz certa.', 'alerta');
   }
 
-  function reiniciar(): void {
+  function limparLeitura(): void {
     esconderPergunta();
     leitor = null;
     regiaoTocada = null;
@@ -133,18 +178,21 @@ export function telaLeitura(nav: Navegar): { el: HTMLElement; parar: () => void 
     resultado.replaceChildren();
     piscas.textContent = '';
     lidos.textContent = '';
-    status.textContent = 'Toque na luz da injeção na imagem.';
-    status.className = 'status';
+  }
+
+  function reiniciar(): void {
+    limparLeitura();
+    definirStatus('Toque na luz da injeção na imagem.');
   }
 
   tela.addEventListener('pointerdown', (ev) => {
-    const caixa = tela.getBoundingClientRect();
-    const regiao: Regiao = {
-      cx: (ev.clientX - caixa.left) / caixa.width,
-      cy: (ev.clientY - caixa.top) / caixa.height,
-      raio: RAIO_TOQUE,
-    };
     if (processo.width === 0) return;
+    const img = retanguloImagem(tela);
+    const cx = (ev.clientX - img.x) / img.w;
+    const cy = (ev.clientY - img.y) / img.h;
+    // Toque na faixa preta em volta da imagem não marca nada.
+    if (cx < 0 || cx > 1 || cy < 0 || cy > 1) return;
+    const regiao: Regiao = { cx, cy, raio: RAIO_TOQUE };
     esconderPergunta();
     regiaoTocada = regiao;
     leitor = new Leitor(regiao, processo.width, processo.height);
@@ -154,14 +202,33 @@ export function telaLeitura(nav: Navegar): { el: HTMLElement; parar: () => void 
     estado = null;
     ultimosConfirmados = '';
     resultado.replaceChildren();
-    status.textContent = 'Lendo… segure firme. Leva de 30 s a 1 min e meio.';
-    status.className = 'status';
+    definirStatus('Lendo… segure firme. Leva de 30 s a 1 min e meio.');
   });
+
+  const botaoZoom = botao('1×', () => {
+    zoom = ZOOMS[(ZOOMS.indexOf(zoom) + 1) % ZOOMS.length] as (typeof ZOOMS)[number];
+    botaoZoom.textContent = `${zoom}×`;
+    botaoZoom.setAttribute('aria-label', `Zoom ${zoom} vezes. Toque para trocar.`);
+    // Zoom muda o enquadramento: o ponto marcado não vale mais.
+    limparLeitura();
+    definirStatus(zoom === 1 ? 'Sem zoom. Toque na luz da injeção.' : `Zoom ${zoom}×. Toque na luz da injeção.`);
+  }, 'zoom');
+  botaoZoom.setAttribute('data-testid', 'zoom');
+  botaoZoom.setAttribute('aria-label', 'Zoom 1 vez. Toque para trocar.');
+
+  /** Recorte do vídeo para o zoom digital: centro, 1/zoom do tamanho. */
+  function recorte(): { sx: number; sy: number; sw: number; sh: number } {
+    const sw = video.videoWidth / zoom;
+    const sh = video.videoHeight / zoom;
+    return { sx: (video.videoWidth - sw) / 2, sy: (video.videoHeight - sh) / 2, sw, sh };
+  }
 
   function desenhar(): void {
     if (!ctxTela) return;
-    ctxTela.drawImage(video, 0, 0, tela.width, tela.height);
+    const { sx, sy, sw, sh } = recorte();
+    ctxTela.drawImage(video, sx, sy, sw, sh, 0, 0, tela.width, tela.height);
     const regiao = estado?.regiao ?? (achadaSozinha ? null : (buscador?.sugestao ?? buscador?.emTeste));
+    dica.hidden = !!leitor || !pergunta.hidden;
     if (!regiao) return;
     const escala = tela.width;
     ctxTela.lineWidth = Math.max(2, escala / 200);
@@ -176,19 +243,16 @@ export function telaLeitura(nav: Navegar): { el: HTMLElement; parar: () => void 
     if (!estado) return;
     const alerta = estado.alertas[0];
     const confirmados = estado.confirmados ?? confirmadosBusca;
-    if (confirmados) {
-      status.textContent = achadaSozinha
-        ? 'Li os códigos na luz que você confirmou. Luz errada? Toque na luz certa na imagem.'
-        : 'Leitura confirmada (a lista repetiu igual).';
-      status.className = 'status';
-    } else if (alerta && leitor) {
-      status.textContent = MENSAGEM_ALERTA[alerta] ?? '';
-      status.className = 'status alerta';
-    } else if (leitor) {
-      status.textContent = estado.regiaoRefinada
-        ? 'Lendo… esperando a lista de códigos repetir.'
-        : 'Lendo… segure firme. Leva de 30 s a 1 min e meio.';
-      status.className = 'status';
+    if (performance.now() >= statusFixoAte) {
+      if (confirmados) {
+        definirStatus('Leitura confirmada. Toque em Encerrar e conferir.');
+      } else if (alerta && leitor) {
+        definirStatus(MENSAGEM_ALERTA[alerta] ?? '', 'alerta');
+      } else if (leitor) {
+        definirStatus(
+          estado.regiaoRefinada ? 'Lendo… esperando a lista de códigos repetir.' : 'Lendo… segure firme. Leva de 30 s a 1 min e meio.',
+        );
+      }
     }
     const { longos, curtos } = estado.grupoAtual;
     piscas.textContent = SIMBOLO_PISCA.longo.repeat(longos) + SIMBOLO_PISCA.curto.repeat(curtos);
@@ -197,9 +261,19 @@ export function telaLeitura(nav: Navegar): { el: HTMLElement; parar: () => void 
 
     const chave = confirmados?.join(',') ?? '';
     if (chave !== ultimosConfirmados) {
+      // Vibra quando a leitura confirma (só Android; iPhone ignora). Quem está olhando o painel sente.
+      if (chave && !ultimosConfirmados) navigator.vibrate?.([80, 60, 80]);
       ultimosConfirmados = chave;
       resultado.replaceChildren(
-        ...(confirmados ?? []).map((c) => cartaoCodigo(buscarCodigo(c), 'codigo-confirmado')),
+        ...(confirmados ?? []).map((c) =>
+          h(
+            'p',
+            { class: 'chip', 'data-testid': 'codigo-confirmado', 'data-codigo': String(c) },
+            h('strong', {}, String(c)),
+            ' ',
+            h('span', { class: 'nome' }, buscarCodigo(c).nome),
+          ),
+        ),
       );
     }
   }
@@ -210,23 +284,32 @@ export function telaLeitura(nav: Navegar): { el: HTMLElement; parar: () => void 
     ultimoT = t;
     const altura = Math.round((LARGURA_PROCESSO * video.videoHeight) / video.videoWidth);
     if (processo.width !== LARGURA_PROCESSO || processo.height !== altura) {
+      const tinhaQuadro = processo.width > 0 && processo.height > 0;
+      const eraDeitado = processo.width > processo.height;
       processo.width = LARGURA_PROCESSO;
       processo.height = altura;
       tela.width = Math.min(960, video.videoWidth);
       tela.height = Math.round((tela.width * video.videoHeight) / video.videoWidth);
       lum = new Uint8Array(LARGURA_PROCESSO * altura);
-      // A câmera pode trocar de resolução no começo: leitura e busca valem para um tamanho de quadro só.
-      // A região é normalizada (0..1), então o toque continua valendo no tamanho novo.
-      if (leitor) leitor = new Leitor(estado?.regiao ?? regiaoTocada ?? { cx: 0.5, cy: 0.5, raio: RAIO_TOQUE }, LARGURA_PROCESSO, altura);
-      else status.textContent = 'Toque na luz da injeção na imagem.';
-      if (buscador) {
-        // Pergunta aberta é do buscador antigo; o "sim" leria o ponto dele, não o desenhado.
-        esconderPergunta();
-        buscador = new BuscadorLuz();
+      if (tinhaQuadro && eraDeitado !== processo.width > processo.height) {
+        // Girou o celular: a imagem da câmera girou junto e o ponto marcado aponta para outro lugar.
+        limparLeitura();
+        definirStatus('Celular girou. Toque na luz da injeção de novo.', 'alerta', 3000);
+      } else {
+        // A câmera pode trocar de resolução no começo: leitura e busca valem para um tamanho de quadro só.
+        // A região é normalizada (0..1), então o toque continua valendo no tamanho novo.
+        if (leitor) leitor = new Leitor(estado?.regiao ?? regiaoTocada ?? { cx: 0.5, cy: 0.5, raio: RAIO_TOQUE }, LARGURA_PROCESSO, altura);
+        else definirStatus('Toque na luz da injeção na imagem.');
+        if (buscador) {
+          // Pergunta aberta é do buscador antigo; o "sim" leria o ponto dele, não o desenhado.
+          esconderPergunta();
+          buscador = new BuscadorLuz();
+        }
       }
       estado = null;
     }
-    ctxProcesso.drawImage(video, 0, 0, processo.width, processo.height);
+    const { sx, sy, sw, sh } = recorte();
+    ctxProcesso.drawImage(video, sx, sy, sw, sh, 0, 0, processo.width, processo.height);
     const rgba = ctxProcesso.getImageData(0, 0, processo.width, processo.height).data;
     luminanciaDeRgba(rgba, processo.width * processo.height, lum);
 
@@ -281,11 +364,12 @@ export function telaLeitura(nav: Navegar): { el: HTMLElement; parar: () => void 
       });
     } catch (erro) {
       const nome = (erro as DOMException)?.name;
-      status.textContent =
+      definirStatus(
         nome === 'NotAllowedError'
           ? 'Sem permissão para a câmera. Libere a câmera para este site nas configurações do navegador.'
-          : 'Não consegui abrir a câmera. Este navegador precisa de HTTPS para usar a câmera.';
-      status.className = 'status erro';
+          : 'Não consegui abrir a câmera. Este navegador precisa de HTTPS para usar a câmera.',
+        'erro',
+      );
       return;
     }
     if (!ativo) {
@@ -298,12 +382,11 @@ export function telaLeitura(nav: Navegar): { el: HTMLElement; parar: () => void 
     } catch {
       stream.getTracks().forEach((t) => t.stop());
       stream = null;
-      status.textContent = 'A câmera abriu, mas o vídeo não começou. Toque em Voltar e tente de novo.';
-      status.className = 'status erro';
+      definirStatus('A câmera abriu, mas o vídeo não começou. Toque em Voltar e tente de novo.', 'erro');
       return;
     }
     if (!ativo) return;
-    status.textContent = 'Toque na luz da injeção na imagem.';
+    definirStatus('Toque na luz da injeção na imagem.');
     laco();
     try {
       const trava = (await (navigator as Navigator & { wakeLock?: { request(t: 'screen'): Promise<{ release(): Promise<void> }> } }).wakeLock?.request('screen')) ?? null;
@@ -325,6 +408,14 @@ export function telaLeitura(nav: Navegar): { el: HTMLElement; parar: () => void 
     // Só o que foi lido numa luz confirmada (tocada, ou achada e aceita): leitura de um ponto que a
     // pessoa ainda não confirmou pode ser reflexo.
     return leitor?.resumo() ?? { codigos: [], descartadas: 0, confirmacaoAutomatica: null };
+  }
+
+  /** Captura (tela fixa, sem rolar) ou conferência (página que rola, com a ação presa embaixo). */
+  function modo(m: 'captura' | 'conferencia'): void {
+    el.classList.toggle('modo-captura', m === 'captura');
+    captura.hidden = m !== 'captura';
+    conferencia.hidden = m !== 'conferencia';
+    window.scrollTo(0, 0);
   }
 
   function encerrar(): void {
@@ -359,7 +450,7 @@ export function telaLeitura(nav: Navegar): { el: HTMLElement; parar: () => void 
         h('div', { class: 'numero' }, c.codigo === null ? '—' : String(c.codigo)),
         mapaPiscas(c.piscas),
         h('p', { class: 'situacao' }, textoSituacao(c)),
-        c.codigo !== null ? h('label', { class: 'usar' }, marcar, ' usar este código') : null,
+        c.codigo !== null ? h('label', { class: 'usar' }, marcar, 'usar este código') : null,
       );
     });
     atualizar();
@@ -372,11 +463,9 @@ export function telaLeitura(nav: Navegar): { el: HTMLElement; parar: () => void 
       ...(resumo.descartadas > 0
         ? [h('p', { class: 'sub' }, `${resumo.descartadas} leitura(s) descartada(s) no caminho (cortadas ou fora do padrão).`)]
         : []),
-      h('div', { class: 'botoes' }, confirmar, botaoVoltarALer()),
+      h('div', { class: 'acoes acoes-fixas' }, botaoVoltarALer(), confirmar),
     );
-    captura.hidden = true;
-    conferencia.hidden = false;
-    window.scrollTo(0, 0);
+    modo('conferencia');
   }
 
   function botaoVoltarALer(): HTMLButtonElement {
@@ -386,10 +475,12 @@ export function telaLeitura(nav: Navegar): { el: HTMLElement; parar: () => void 
   }
 
   function mostrarDefeitos(codigos: number[]): void {
+    const inicio = botao('Início', nav.inicio);
+    inicio.setAttribute('data-testid', 'ir-inicio');
     conferencia.replaceChildren(
       h('h2', {}, 'Defeitos'),
       ...codigos.map((c) => cartaoCodigo(buscarCodigo(c), 'codigo-defeito')),
-      h('div', { class: 'botoes' }, botaoVoltarALer(), botao('Início', nav.inicio)),
+      h('div', { class: 'acoes acoes-fixas' }, inicio, botaoVoltarALer()),
     );
     window.scrollTo(0, 0);
   }
@@ -401,44 +492,54 @@ export function telaLeitura(nav: Navegar): { el: HTMLElement; parar: () => void 
       esconderPergunta();
       buscador = new BuscadorLuz();
     }
-    conferencia.hidden = true;
     conferencia.replaceChildren();
-    captura.hidden = false;
+    modo('captura');
     pausado = false;
+  }
+
+  /**
+   * Voltar do sistema (gesto ou botão do Android). Na conferência: volta para a leitura. Com leitura
+   * começada: o primeiro avisa, o segundo (em até 4 s) sai. Sem luz marcada ainda: sai.
+   */
+  function aoVoltar(): boolean {
+    if (!conferencia.hidden) {
+      voltarALer();
+      return true;
+    }
+    // Leitura começada (luz marcada ou aceita), confirmada ou não: sair perde o que está na tela.
+    const lendo = leitor !== null;
+    const agora = performance.now();
+    if (lendo && agora - avisoSairEm > JANELA_SAIR_MS) {
+      avisoSairEm = agora;
+      definirStatus('Leitura em andamento. Volte de novo para sair.', 'alerta', JANELA_SAIR_MS);
+      return true;
+    }
+    return false;
   }
 
   const botaoEncerrar = botao('Encerrar e conferir', encerrar, 'primario');
   botaoEncerrar.setAttribute('data-testid', 'encerrar');
+  const botaoMarcar = botao('Marcar de novo', reiniciar);
+  botaoMarcar.setAttribute('data-testid', 'marcar-de-novo');
 
   captura.append(
-    h('div', { class: 'camera' }, video, tela),
-    pergunta,
-    status,
-    piscas,
-    lidos,
-    resultado,
-    h(
-      'div',
-      { class: 'botoes' },
-      botaoEncerrar,
-      botao('Marcar a luz de novo', reiniciar),
-      botao('Como preparar o carro', nav.preparar),
-    ),
-    h(
-      'p',
-      { class: 'nota' },
-      'Luz errada? Toque na luz da injeção na imagem a qualquer momento. Luz do cinto acesa ao lado atrapalha: afivele o cinto.',
-    ),
+    h('div', { class: 'camera' }, video, tela, dica, botaoZoom),
+    h('div', { class: 'painel', 'data-testid': 'painel' }, status, piscas, lidos, resultado),
+    h('div', { class: 'rodape' }, pergunta, h('div', { class: 'acoes' }, botaoMarcar, botaoEncerrar)),
   );
 
+  const sair = botao('Voltar', nav.voltar, 'voltar');
+  sair.setAttribute('data-testid', 'sair');
+  const ajuda = botao('Ajuda', nav.preparar, 'voltar');
+  ajuda.setAttribute('data-testid', 'ajuda');
   const el = h(
     'section',
-    { 'data-tela': 'leitura' },
-    h('div', { class: 'topo' }, h('h1', {}, 'Ler os códigos'), botao('Voltar', nav.inicio, 'voltar')),
-    h('p', { class: 'sub' }, 'Jumper no SCS, ignição em ON sem dar partida. Aponte para o painel e toque na luz da injeção.'),
+    { class: 'leitura modo-captura', 'data-tela': 'leitura' },
+    // Título só para leitor de tela na captura: a tela fala por si e o espaço vai para a câmera.
+    h('div', { class: 'barra' }, sair, h('h1', { class: 'so-leitor-de-tela' }, 'Ler os códigos'), ajuda),
     captura,
     conferencia,
   );
   void abrir();
-  return { el, parar };
+  return { el, parar, aoVoltar };
 }

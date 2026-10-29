@@ -8,6 +8,8 @@ PWA que lê pela câmera o código de defeito piscado pela luz da injeção nos 
 3. O app confirma quando a lista de códigos se repete igual. Leva de 30 s a 2 min, dependendo de quantos códigos houver.
 
 Se você não tocar, o app tenta achar a luz sozinho. Ele só aponta o lugar depois de já ter lido os códigos ali.
+O botão de zoom (1×, 2×, 3×) amplia o centro da imagem quando a luz parece pequena. Trocar o zoom recomeça a leitura.
+No Android, o voltar do sistema na conferência retorna à leitura; no meio da leitura, o primeiro voltar avisa e o segundo sai.
 
 ## Rodar
 ```bash

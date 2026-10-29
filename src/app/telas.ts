@@ -1,6 +1,6 @@
 // Telas estáticas: início, como preparar o carro e tabela de códigos.
 
-import { CODIGOS, FONTES, type Codigo } from '../codigos/tabela';
+import { CODIGOS, DESCONHECIDO, FONTES, type Codigo } from '../codigos/tabela';
 
 type Filho = Node | string | null | undefined | false;
 
@@ -19,14 +19,17 @@ export function botao(texto: string, acao: () => void, classe = ''): HTMLButtonE
 }
 
 export interface Navegar {
+  /** Direto para o início (botão "Início"). */
   inicio(): void;
+  /** Uma tela para trás, igual ao voltar do Android. */
+  voltar(): void;
   preparar(): void;
   ler(): void;
   tabela(): void;
 }
 
 function topo(titulo: string, nav: Navegar): HTMLElement {
-  return h('div', { class: 'topo' }, h('h1', {}, titulo), botao('Voltar', nav.inicio, 'voltar'));
+  return h('div', { class: 'topo' }, h('h1', {}, titulo), botao('Voltar', nav.voltar, 'voltar'));
 }
 
 export function telaInicio(nav: Navegar): HTMLElement {
@@ -134,7 +137,7 @@ const ROTULO_SITUACAO: Record<Codigo['situacao'], string> = {
 export function cartaoCodigo(c: Codigo, testid = 'codigo'): HTMLElement {
   return h(
     'article',
-    { class: 'cartao', 'data-testid': testid, 'data-codigo': String(c.codigo) },
+    { class: 'cartao', id: `codigo-${c.codigo}`, 'data-testid': testid, 'data-codigo': String(c.codigo) },
     h('div', { class: 'numero' }, String(c.codigo)),
     h('h3', {}, c.nome),
     h(
@@ -153,11 +156,56 @@ export function cartaoCodigo(c: Codigo, testid = 'codigo'): HTMLElement {
   );
 }
 
+/**
+ * Tabela: lista longa (33 códigos). Campo fixo no topo para ir direto ao número lido, com teclado
+ * numérico; código fora da tabela ganha a orientação geral em vez de "não achei" seco (D31).
+ */
 export function telaTabela(nav: Navegar): HTMLElement {
+  const campo = h('input', {
+    type: 'text',
+    inputmode: 'numeric',
+    pattern: '[0-9]*',
+    maxlength: '2',
+    autocomplete: 'off',
+    enterkeyhint: 'go',
+    id: 'ir-codigo',
+    'data-testid': 'ir-codigo',
+    'aria-describedby': 'ir-codigo-aviso',
+  }) as HTMLInputElement;
+  const aviso = h('p', { class: 'aviso-busca', id: 'ir-codigo-aviso', 'data-testid': 'ir-codigo-aviso', 'aria-live': 'polite' });
+  let destacado: HTMLElement | null = null;
+  const irPara = (final: boolean) => {
+    const numero = campo.value.replace(/\D/g, '');
+    aviso.textContent = '';
+    destacado?.classList.remove('destaque');
+    destacado = null;
+    if (!numero) return;
+    const alvo = document.getElementById(`codigo-${Number(numero)}`);
+    if (alvo) {
+      alvo.classList.add('destaque');
+      alvo.scrollIntoView({ block: 'start', behavior: 'smooth' });
+      destacado = alvo;
+    } else if (final || numero.length === 2) {
+      aviso.textContent = `${Number(numero)} não está na tabela. ${DESCONHECIDO.conferir}`;
+    }
+  };
+  campo.addEventListener('input', () => irPara(false));
+  campo.addEventListener('keydown', (ev) => {
+    if (ev.key === 'Enter') irPara(true);
+  });
+  const ir = botao('Ir', () => irPara(true), 'primario');
+  ir.setAttribute('data-testid', 'ir-codigo-botao');
   return h(
     'section',
     { 'data-tela': 'tabela' },
     topo('Tabela de códigos', nav),
+    h(
+      'div',
+      { class: 'busca-codigo' },
+      h('label', { for: 'ir-codigo' }, 'Ir para o código'),
+      h('div', { class: 'linha-busca' }, campo, ir),
+      aviso,
+    ),
     h(
       'p',
       { class: 'sub' },
